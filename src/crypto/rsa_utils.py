@@ -55,7 +55,15 @@ def decrypt_int(c, private_key): # chiffrement d'un entier avec la clé privée 
 # on veut aussi pouvoir chiffrer et déchiffrer des messages pas que des nombres, on convertit les messages en bytes
 # les deux fonctions qui suiven transforme un texte en byte, chiffre chaque octet individuellement, renvoi une liste d'entier et déchiffre pour retrouver les message originel
 def encrypt_bytes(data, public_key):
+    chiffrer_list = []
+    for byte in data:
+        chiffrer_list.append(encrypt_int(byte, public_key)) #permet de crypter l'octet avec la fonction qu'on à créée précédement
+    return chiffrer_list
 
 def decrypt_bytes(chiffrer_list, private_key):
-
-# --- Tests ---
+    plaintext = []
+    for byte in chiffrer_list:
+        dechiffre = decrypt_int(byte, private_key)
+        plaintext.append(dechiffre)
+    final = bytes(plaintext)
+    return final
