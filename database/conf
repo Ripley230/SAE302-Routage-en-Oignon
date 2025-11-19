@@ -1,0 +1,31 @@
+CREATE TABLE routers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(64) NOT NULL UNIQUE,
+  ip   VARCHAR(64) NOT NULL,
+  port INT NOT NULL,
+  n LONGTEXT NOT NULL,
+  e BIGINT NOT NULL,
+  enabled TINYINT(1) DEFAULT 1,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE router_status (
+  router_name VARCHAR(64) PRIMARY KEY,
+  last_seen TIMESTAMP NOT NULL,
+  load INT DEFAULT 0
+);
+
+CREATE TABLE logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  router_name VARCHAR(64) NOT NULL,
+  event TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE mutex (
+  name VARCHAR(64) PRIMARY KEY,
+  note VARCHAR(255)
+);
+
+INSERT IGNORE INTO mutex(name, note)
+VALUES ('global_write', 'serialize critical updates');
