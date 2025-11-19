@@ -1,4 +1,6 @@
 import random
+from typing import final
+
 from sympy import isprime
 from math import gcd
 
