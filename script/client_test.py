@@ -6,4 +6,4 @@ if __name__ == "__main__":
     if route is None:
         print("Impossible de construire la route !")
     else:
-        send_message("Bonjour, ceci est un test Onion !", route)
+        send_message("Bonjour", route)

@@ -1,21 +1,35 @@
 import json
+import base64
 from src.crypto.rsa_utils import encrypt_block
 
 def build_layer(data, public_key, next_hop):
 
-    # Si data est en bytes → OK pour encrypt_block
-    if isinstance(data, list):
-        data = bytes(data)
+    # 1) Si data est en bytes → convertir en base64 pour le JSON
+    if isinstance(data, bytes):
+        data_json = base64.b64encode(data).decode("utf-8")
 
+    # 2) Si data est un int → c’est déjà JSON-OK
+    elif isinstance(data, int):
+        data_json = data
+
+    # 3) Si data est une liste → peut arriver
+    elif isinstance(data, list):
+        data_json = data
+
+    else:
+        raise TypeError(f"Type inattendu dans build_layer: {type(data)}")
+
+    # Construction de la couche
     layer = {
         "next_hop": next_hop,
-        "payload": data.decode("latin-1")  # pour le JSON
+        "payload": data_json
     }
 
-    json_layer = json.dumps(layer).encode("utf-8")
+    # Encode en JSON → bytes
+    json_bytes = json.dumps(layer).encode("utf-8")
 
-    # On chiffre la couche complète dans un seul bloc RSA
-    encrypted_block = encrypt_block(json_layer, public_key)
+    # Chiffrement RSA en un seul bloc
+    encrypted_block = encrypt_block(json_bytes, public_key)
 
     return encrypted_block
 

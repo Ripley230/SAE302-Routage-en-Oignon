@@ -1,7 +1,7 @@
 import json
 import socket
+import base64
 from src.crypto.rsa_utils import decrypt_block
-
 
 def register_to_master(public_key, listen_port):
     msg = {
@@ -28,7 +28,7 @@ def run_router(private_key, public_key, listen_port):
     while True:
         conn, addr = sock.accept()
 
-        # --- RECEVOIR TOUTES LES DONNEES ---
+        # On lit TOUT le bloc jusqu'à la fin
         buffer = b""
         while True:
             chunk = conn.recv(4096)
@@ -36,24 +36,52 @@ def run_router(private_key, public_key, listen_port):
                 break
             buffer += chunk
 
-        # buffer contient maintenant TOUT le JSON
-        layer_encrypted = json.loads(buffer.decode("utf-8"))
+        # --- buffer contient un ENTIER (RSA chiffré) sous forme de string ---
+        encrypted_block = int(buffer.decode("utf-8"))
 
-        json_bytes = decrypt_block(chiffrer_list, private_key)
+        # Déchiffrement RSA
+        json_bytes = decrypt_block(encrypted_block, private_key)
+
+        # Décodage JSON
         layer = json.loads(json_bytes.decode("utf-8"))
 
         next_hop = layer["next_hop"]
         payload = layer["payload"]
 
+        # Restitution du payload
+        # Cas 1 : payload est une STRING base64 → reconstruct bytes
+        if isinstance(payload, str):
+            try:
+                payload = base64.b64decode(payload)
+            except:
+                pass
+
+        # Cas 2 : payload est un INT → couche chiffrée suivante
+        if isinstance(payload, int):
+            # On doit renvoyer cette couche telle quelle
+            forward_data = str(payload).encode("utf-8")
+
+        # Cas 3 : payload est bytes → dernier routeur
+        elif isinstance(payload, (bytes, bytearray)):
+            forward_data = payload
+
+        # Cas 4 : payload est une liste → convertir en bytes
+        elif isinstance(payload, list):
+            forward_data = bytes(payload)
+
+        else:
+            raise TypeError(f"Type payload inconnu : {type(payload)}")
+
+        # Dernier routeur ?
         if next_hop == "":
-            msg_bytes = bytes(payload)
-            print("Message final reçu :", msg_bytes.decode("utf-8"))
+            print("Message final reçu :", forward_data.decode("utf-8"))
         else:
             ip, port = next_hop.split(":")
             port = int(port)
+
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((ip, port))
-            s.send(json.dumps(payload).encode("utf-8"))
+            s.send(forward_data)
             s.close()
 
         conn.close()
