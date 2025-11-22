@@ -1,5 +1,5 @@
-from rsa_utils import generate_keypair
-from router import run_router
+from src.crypto.rsa_utils import generate_keypair
+from src.router.router import run_router
 
 if __name__ == "__main__":
     pub, priv = generate_keypair(1024)

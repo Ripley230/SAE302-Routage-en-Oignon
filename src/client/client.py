@@ -1,8 +1,8 @@
 import json
 import socket
-from oignon_builder import build_oignon
+from src.oignon_builder import build_oignon
 import random
-from rsa_utils import PublicKey
+from src.crypto.rsa_utils import PublicKey
 
 
 def send_message(message, route):

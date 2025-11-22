@@ -1,6 +1,6 @@
 import json
 import socket
-from db_utils import register_router, get_all_routers
+from src.db_utils import register_router, get_all_routers
 
 def run_master(listen_port):
 

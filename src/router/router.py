@@ -1,6 +1,6 @@
 import json
 import socket
-from rsa_utils import decrypt_bytes
+from src.crypto.rsa_utils import decrypt_bytes
 from db_utils import register_router   # si auto-registration par la BDD
 # OU:
 # import socket pour envoyer REGISTER au master
