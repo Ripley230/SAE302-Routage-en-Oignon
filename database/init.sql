@@ -1,62 +1,50 @@
--- ============================================================
---   SAE 3.02 - Base sae302
---   Tables : routeurs + routes
--- ============================================================
+CREATE DATABASE IF NOT EXISTS onion_project
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 
--- 1. Création de la base
-CREATE DATABASE IF NOT EXISTS sae302
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
+USE onion_project;
 
-USE sae302;
-
--- ============================================================
--- 2. Table : routeurs
---    Stocke l'adresse + clé publique RSA (n, e)
--- ============================================================
-DROP TABLE IF EXISTS routeurs;
-
-CREATE TABLE routeurs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    ip_port VARCHAR(100) NOT NULL UNIQUE,  -- ex : "192.168.1.10:5001"
-    n TEXT NOT NULL,                       -- clé publique RSA (modulus)
-    e TEXT NOT NULL,                       -- clé publique RSA (exponent)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS routers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(64) NOT NULL UNIQUE,
+  ip VARCHAR(64) NOT NULL,
+  port INT NOT NULL,
+  n LONGTEXT NOT NULL,
+  e BIGINT NOT NULL,
+  enabled TINYINT(1) DEFAULT 1,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Index utile
-CREATE INDEX idx_routeurs_ip_port ON routeurs(ip_port);
-
-
--- ============================================================
--- 3. Table : routes
---    Correspond à la table de routage gérée par le master
--- ============================================================
-DROP TABLE IF EXISTS routes;
-
-CREATE TABLE routes (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-
-    -- Routeur auquel appartient la règle
-    routeur_id INT NOT NULL,
-
-    -- Destination finale (nom, ip ou client-id)
-    destination VARCHAR(100) NOT NULL,
-
-    -- Prochain saut (router suivant, ou client final)
-    next_hop VARCHAR(100) NOT NULL,
-
-    -- Optionnel : interface logique
-    interface VARCHAR(20) DEFAULT NULL,
-
-    -- Contrainte FK
-    CONSTRAINT fk_routes_routeur
-        FOREIGN KEY (routeur_id)
-        REFERENCES routeurs(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
+CREATE TABLE IF NOT EXISTS routes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  router_id INT NOT NULL,
+  destination VARCHAR(64) NOT NULL,
+  next_hop VARCHAR(64) NOT NULL,
+  interface VARCHAR(32) DEFAULT NULL,
+  priority INT DEFAULT 0,
+  FOREIGN KEY (router_id) REFERENCES routers(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- Index pour optimiser les recherches
-CREATE INDEX idx_routes_routeur_id ON routes(routeur_id);
+CREATE INDEX idx_routes_router_id ON routes(router_id);
 CREATE INDEX idx_routes_destination ON routes(destination);
+
+CREATE TABLE IF NOT EXISTS router_status (
+  router_name VARCHAR(64) PRIMARY KEY,
+  last_seen TIMESTAMP NOT NULL,
+  router_load INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  router_name VARCHAR(64) NOT NULL,
+  event TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mutex (
+  name VARCHAR(64) PRIMARY KEY,
+  note VARCHAR(255)
+);
+
+INSERT IGNORE INTO mutex(name, note)
+VALUES ('global_write', 'serialize critical updates');
