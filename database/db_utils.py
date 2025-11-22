@@ -1,0 +1,31 @@
+import mysql.connector
+
+def get_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="root",
+        database="sae302"
+    )
+
+def register_router(ip_port, n, e):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO routeurs (ip_port, n, e) VALUES (%s, %s, %s)",
+        (ip_port, str(n), str(e))
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_all_routers():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT ip_port, n, e FROM routeurs")
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return rows
