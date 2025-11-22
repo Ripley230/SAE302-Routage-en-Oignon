@@ -56,16 +56,17 @@ def decrypt_int(c, private_key): # chiffrement d'un entier avec la clé privée 
 
 # on veut aussi pouvoir chiffrer et déchiffrer des messages pas que des nombres, on convertit les messages en bytes
 # les deux fonctions qui suiven transforme un texte en byte, chiffre chaque octet individuellement, renvoi une liste d'entier et déchiffre pour retrouver les message originel
-def encrypt_bytes(data, public_key):
-    chiffrer_list = []
-    for byte in data:
-        chiffrer_list.append(encrypt_int(byte, public_key)) #permet de crypter l'octet avec la fonction qu'on à créée précédement
-    return chiffrer_list
+def encrypt_block(data, public_key):
+    # Convert bytes to giant int
+    m = int.from_bytes(data, byteorder="big")
+    if m >= public_key.n:
+        raise ValueError("Message trop large pour RSA en un seul bloc")
+    # RSA
+    c = pow(m, public_key.e, public_key.n)
+    return c
 
-def decrypt_bytes(chiffrer_list, private_key):
-    plaintext = []
-    for byte in chiffrer_list:
-        dechiffre = decrypt_int(byte, private_key)
-        plaintext.append(dechiffre)
-    final = bytes(plaintext)
-    return final
+def decrypt_block(c, private_key):
+    m = pow(c, private_key.d, private_key.n)
+    # Convert int back to bytes
+    size = (private_key.n.bit_length() + 7) // 8
+    return m.to_bytes(size, byteorder="big").lstrip(b"\x00")

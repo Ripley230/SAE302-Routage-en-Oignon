@@ -1,9 +1,7 @@
 import json
 import socket
-from src.crypto.rsa_utils import decrypt_bytes
-from src.db_utils import register_router   # si auto-registration par la BDD
-# OU:
-# import socket pour envoyer REGISTER au master
+from src.crypto.rsa_utils import decrypt_block
+
 
 def register_to_master(public_key, listen_port):
     msg = {
@@ -12,13 +10,13 @@ def register_to_master(public_key, listen_port):
         "address": f"127.0.0.1:{listen_port}"
     }
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("127.0.0.1", 8000))   # MASTER
+    s.connect(("127.0.0.1", 8000))
     s.send(json.dumps(msg).encode("utf-8"))
     s.close()
+    print(f"[DEBUG] Router enregistré sur {listen_port}")
+
 
 def run_router(private_key, public_key, listen_port):
-
-    # --- Enregistrement auprès du master ---
     register_to_master(public_key, listen_port)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,20 +25,29 @@ def run_router(private_key, public_key, listen_port):
 
     print(f"[ROUTER {listen_port}] En écoute...")
 
-    while True:          # <-- boucle infinie obligatoire !!!
+    while True:
         conn, addr = sock.accept()
-        data = conn.recv(4096)
 
-        chiffrer_list = json.loads(data.decode("utf-8"))
-        json_bytes = decrypt_bytes(chiffrer_list, private_key)
+        # --- RECEVOIR TOUTES LES DONNEES ---
+        buffer = b""
+        while True:
+            chunk = conn.recv(4096)
+            if not chunk:
+                break
+            buffer += chunk
+
+        # buffer contient maintenant TOUT le JSON
+        layer_encrypted = json.loads(buffer.decode("utf-8"))
+
+        json_bytes = decrypt_block(chiffrer_list, private_key)
         layer = json.loads(json_bytes.decode("utf-8"))
 
         next_hop = layer["next_hop"]
         payload = layer["payload"]
 
         if next_hop == "":
-            msg = decrypt_bytes(payload, private_key)
-            print("Message final reçu :", msg.decode("utf-8"))
+            msg_bytes = bytes(payload)
+            print("Message final reçu :", msg_bytes.decode("utf-8"))
         else:
             ip, port = next_hop.split(":")
             port = int(port)
@@ -49,7 +56,4 @@ def run_router(private_key, public_key, listen_port):
             s.send(json.dumps(payload).encode("utf-8"))
             s.close()
 
-        conn.close()     # <-- fermeture du client
-
-
-
+        conn.close()

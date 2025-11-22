@@ -1,6 +1,6 @@
 import json
 import socket
-from src.oignon_builder import build_oignon
+from src.client.oignon_builder import build_oignon
 import random
 from src.crypto.rsa_utils import PublicKey
 
@@ -33,7 +33,7 @@ def get_route_from_master(master_ip, master_port):
 
     route = []
     for r in selected:
-        pub = PublicKey(r["public_key"]["n"], r["public_key"]["e"])
-        route.append((pub, r["address"]))
+        pub = PublicKey(int(r["n"]), int(r["e"]))
+        route.append((pub, r["ip_port"]))
 
     return route

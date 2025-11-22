@@ -1,4 +1,4 @@
-from client import get_route_from_master, send_message
+from src.client.client import get_route_from_master, send_message
 
 if __name__ == "__main__":
     route = get_route_from_master("127.0.0.1", 8000)
