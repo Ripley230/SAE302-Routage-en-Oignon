@@ -6,6 +6,7 @@ from src.network.register import register_to_master
 
 
 def run_router(private_key, public_key, listen_port):
+    # Enregistrement auprès du master
     register_to_master(public_key, listen_port)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,46 +26,57 @@ def run_router(private_key, public_key, listen_port):
                 break
             buffer += chunk
 
-        # Ce que l'on reçoit est TOUJOURS une liste RSA JSON
+        # 1) On récupère la liste d'entiers RSA envoyée en JSON
         try:
             encrypted_blocks = json.loads(buffer.decode("utf-8"))
-        except:
-            print("[ERREUR] Impossible de décoder la liste RSA JSON")
-            print(buffer)
+        except Exception as e:
+            print(f"[ROUTER {listen_port}] ERREUR: données non JSON au niveau entrée :", e)
+            print("Buffer brut (début):", buffer[:200], "...\n")
             conn.close()
             continue
 
-        # Déchiffrement de la couche
+        # 2) Déchiffrement de la couche
         json_bytes = decrypt_block(encrypted_blocks, private_key)
 
         try:
             layer = json.loads(json_bytes.decode("utf-8"))
-        except:
-            print("\n=== ERREUR ===")
-            print("Couche non décodable UTF-8 !")
-            print("Bytes reçus :", json_bytes)
-            print("==============\n")
+        except Exception as e:
+            print(f"[ROUTER {listen_port}] ERREUR: couche non décodable en UTF-8 / JSON :", e)
+            print("Bytes reçus (début):", json_bytes[:200], "...\n")
             conn.close()
             continue
 
         next_hop = layer["next_hop"]
-        payload = layer["payload"]   # ⚠️ CECI est la couche suivante
+        payload = layer["payload"]
 
-        # Dernier routeur ?
+        # 3) Dernier routeur ?
         if next_hop == "":
-            # Ici payload est du base64 → décoder message final
-            final_msg = base64.b64decode(payload).decode("utf-8")
-            print(f"[ROUTER {listen_port}] Message final :", final_msg)
-        else:
-            # Envoyer la couche interne (payload) telle quelle (JSON)
-            ip, port = next_hop.split(":")
-            port = int(port)
+            # Ici payload est une string base64 du message final
+            try:
+                msg_bytes = base64.b64decode(payload)
+                print(f"[ROUTER {listen_port}] Message final reçu :", msg_bytes.decode("utf-8"))
+            except Exception as e:
+                print(f"[ROUTER {listen_port}] ERREUR décodage message final :", e)
+            conn.close()
+            continue
 
+        # 4) Pas le dernier routeur → on forward la couche interne telle quelle
+        if not isinstance(payload, list):
+            print(f"[ROUTER {listen_port}] ERREUR: payload intermédiaire n'est pas une liste RSA :", type(payload))
+            print("payload (début):", str(payload)[:200], "...\n")
+            conn.close()
+            continue
+
+        ip, port = next_hop.split(":")
+        port = int(port)
+
+        try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((ip, port))
-
-            # ⚠️ ENVOI EXACT DE LA COUCHE SUIVANTE (pas transformée)
+            # On envoie la liste d'entiers RSA de la couche suivante
             s.send(json.dumps(payload).encode("utf-8"))
             s.close()
+        except Exception as e:
+            print(f"[ROUTER {listen_port}] ERREUR lors de l'envoi au next_hop {next_hop} :", e)
 
         conn.close()

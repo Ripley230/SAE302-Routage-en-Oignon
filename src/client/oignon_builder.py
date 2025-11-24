@@ -2,32 +2,28 @@ import json
 import base64
 from src.crypto.rsa_utils import encrypt_block
 
-
 def build_layer(data, public_key, next_hop):
+    # data = bytes (message) ou liste d'entiers RSA (couche précédente)
 
-    # Convertir data pour JSON
     if isinstance(data, bytes):
-        data_json = base64.b64encode(data).decode("utf-8")
+        # Pour le dernier hop : on encode le message en base64 dans le JSON
+        payload = base64.b64encode(data).decode("utf-8")
     else:
-        data_json = data  # liste ou int déjà JSON-safe
+        # Pour les couches intermédiaires : data est déjà une liste d'entiers RSA
+        payload = data
 
     layer = {
         "next_hop": next_hop,
-        "payload": data_json
+        "payload": payload
     }
 
     json_bytes = json.dumps(layer).encode("utf-8")
-
     encrypted_blocks = encrypt_block(json_bytes, public_key)
-
-    # On renvoie uniquement les blocs RSA
     return encrypted_blocks
 
 
-def build_oignon(message, route):
-    payload = message
-
+def build_oignon(message_bytes, route):
+    payload = message_bytes
     for (pub, next_hop) in reversed(route):
         payload = build_layer(payload, pub, next_hop)
-
-    return payload
+    return payload  # liste d'entiers RSA pour le premier routeur
