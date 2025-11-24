@@ -7,6 +7,10 @@ from src.crypto.rsa_utils import PublicKey
 
 
 def send_message(message: str, route):
+    """
+    message : texte en clair
+    route   : liste [(PublicKey, "ip:port"), ..., (None, "127.0.0.1:6000")]
+    """
     msg_bytes = message.encode("utf-8")
     onion = build_oignon(msg_bytes, route)
 
@@ -31,15 +35,15 @@ def get_route_from_master(master_ip, master_port):
     s.send(json.dumps(request).encode("utf-8"))
 
     data = s.recv(4096)
-    s.close()
-
     resp = json.loads(data.decode("utf-8"))
     routers = resp["routers"]
 
     if len(routers) < 3:
         print("Pas assez de routeurs enregistrés !")
+        s.close()
         return None
 
+    # Sélectionne 3 routeurs DISTINCTS
     selected = random.sample(routers, 3)
 
     route = []
@@ -47,4 +51,8 @@ def get_route_from_master(master_ip, master_port):
         pub = PublicKey(int(r["n"]), int(r["e"]))
         route.append((pub, r["ip_port"]))
 
+    # Dernier saut : client_receiver (B)
+    route.append((None, "127.0.0.1:6000"))
+
+    s.close()
     return route

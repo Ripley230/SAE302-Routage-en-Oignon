@@ -6,4 +6,13 @@ if __name__ == "__main__":
     if route is None:
         print("Impossible de construire la route !")
     else:
-        send_message("Bonjour", route)
+        print("\n=== ROUTE UTILISÉE PAR LE CLIENT ===")
+        for hop in route:
+            print(hop)
+        print("====================================\n")
+
+        # 🔥 Demander à l'utilisateur d'entrer un message
+        message = input("Entrez le message à envoyer : ")
+
+        send_message(message, route)
+        print("Message envoyé !")
