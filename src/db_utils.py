@@ -1,5 +1,6 @@
 import mysql.connector
 
+
 def get_connection():
     return mysql.connector.connect(
         host="localhost",
@@ -7,6 +8,7 @@ def get_connection():
         password="sae",
         database="sae302"
     )
+
 
 def register_router(ip_port, n, e):
     conn = get_connection()
@@ -18,6 +20,7 @@ def register_router(ip_port, n, e):
     conn.commit()
     cursor.close()
     conn.close()
+
 
 def get_all_routers():
     conn = get_connection()

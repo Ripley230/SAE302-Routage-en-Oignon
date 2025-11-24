@@ -1,13 +1,14 @@
 import json
 import socket
 import base64
+
 from src.crypto.rsa_utils import decrypt_block
 from src.network.register import register_to_master
 
 
-def run_router(private_key, public_key, listen_port):
+def run_router(private_key, public_key, listen_port, master_ip="127.0.0.1", master_port=8000):
     # Enregistrement auprès du master
-    register_to_master(public_key, listen_port)
+    register_to_master(public_key, listen_port, master_ip, master_port)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("0.0.0.0", listen_port))
@@ -30,8 +31,8 @@ def run_router(private_key, public_key, listen_port):
         try:
             encrypted_blocks = json.loads(buffer.decode("utf-8"))
         except Exception as e:
-            print(f"[ROUTER {listen_port}] ERREUR: données non JSON au niveau entrée :", e)
-            print("Buffer brut (début):", buffer[:200], "...\n")
+            print(f"[ROUTER {listen_port}] ERREUR entrée (JSON) :", e)
+            print("Buffer (début) :", buffer[:200], "...\n")
             conn.close()
             continue
 
@@ -41,7 +42,7 @@ def run_router(private_key, public_key, listen_port):
         try:
             layer = json.loads(json_bytes.decode("utf-8"))
         except Exception as e:
-            print(f"[ROUTER {listen_port}] ERREUR: couche non décodable en UTF-8 / JSON :", e)
+            print(f"[ROUTER {listen_port}] ERREUR couche non décodable (UTF-8/JSON) :", e)
             print("Bytes reçus (début):", json_bytes[:200], "...\n")
             conn.close()
             continue
@@ -60,7 +61,7 @@ def run_router(private_key, public_key, listen_port):
             conn.close()
             continue
 
-        # 4) Pas le dernier routeur → on forward la couche interne telle quelle
+        # 4) Routeur intermédiaire → on forward la couche interne (liste RSA)
         if not isinstance(payload, list):
             print(f"[ROUTER {listen_port}] ERREUR: payload intermédiaire n'est pas une liste RSA :", type(payload))
             print("payload (début):", str(payload)[:200], "...\n")

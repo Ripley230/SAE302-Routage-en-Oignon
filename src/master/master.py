@@ -3,7 +3,7 @@ import socket
 from src.db_utils import register_router, get_all_routers
 
 
-def run_master(listen_port):
+def run_master(listen_port: int):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("0.0.0.0", listen_port))
     sock.listen()
@@ -20,7 +20,7 @@ def run_master(listen_port):
 
         message = json.loads(data.decode("utf-8"))
 
-        # --- ROUTEUR QUI S'ENREGISTRE ---
+        # ROUTEUR QUI S'ENREGISTRE
         if message["type"] == "REGISTER":
             try:
                 register_router(
@@ -34,12 +34,10 @@ def run_master(listen_port):
 
             conn.send(b"OK")
 
-        # --- CLIENT QUI DEMANDE UNE ROUTE ---
+        # CLIENT QUI DEMANDE LA LISTE DES ROUTEURS
         elif message["type"] == "GET_ROUTERS":
             routers = get_all_routers()
-
             response = {"routers": routers}
-
             conn.send(json.dumps(response).encode("utf-8"))
 
         conn.close()

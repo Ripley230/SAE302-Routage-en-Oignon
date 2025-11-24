@@ -1,10 +1,14 @@
 import json
 import socket
 
+
 def register_to_master(public_key, listen_port, master_ip="127.0.0.1", master_port=8000):
     msg = {
         "type": "REGISTER",
-        "public_key": {"n": public_key.n, "e": public_key.e},
+        "public_key": {
+            "n": public_key.n,
+            "e": public_key.e
+        },
         "address": f"127.0.0.1:{listen_port}"
     }
 

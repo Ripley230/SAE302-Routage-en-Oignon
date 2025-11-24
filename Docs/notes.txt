@@ -1,0 +1,9 @@
+Fais juste ça :
+
+TRUNCATE TABLE routeurs;
+
+Relance master
+
+Relance router1, router2, router3
+
+Relance client_test
