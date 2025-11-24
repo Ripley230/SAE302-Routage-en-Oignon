@@ -41,7 +41,7 @@ def generate_keypair(bits): # on créer la pair de clés RSA
 
 # Chiffrement et déchiffrement
 def encrypt_int(m, public_key): # chiffrement d'un entier avec la clé publique
-    if m < 0 or m>= public_key.nx: # verifie l'intervale
+    if m < 0 or m>= public_key.n: # verifie l'intervale
         print("La clé public est invalide") # arret en cas d'erreur
         return
     chiffrer1 = pow(m, public_key.e, public_key.n) # chiffrement avec formule RSA
