@@ -32,3 +32,11 @@ def get_all_routers():
     cursor.close()
     conn.close()
     return rows
+
+def clear_router_table():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("TRUNCATE TABLE routeurs")
+    conn.commit()
+    cursor.close()
+    conn.close()

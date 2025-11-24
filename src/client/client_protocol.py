@@ -2,8 +2,8 @@ import socket
 import json
 from typing import Optional, List, Dict, Tuple
 
-from crypto.oignon_builder import build_oignon
-from crypto.rsa_utils import load_public_key   # si tu l’utilises, sinon enlève
+from src.client.oignon_builder import build_oignon
+
 
 
 class ClientProtocol:
