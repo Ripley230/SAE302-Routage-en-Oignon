@@ -41,7 +41,7 @@ def generate_keypair(bits): # on créer la pair de clés RSA
 
 # Chiffrement et déchiffrement
 def encrypt_int(m, public_key): # chiffrement d'un entier avec la clé publique
-    if m < 0 or m>= public_key.n: # verifie l'intervale
+    if m < 0 or m>= public_key.nx: # verifie l'intervale
         print("La clé public est invalide") # arret en cas d'erreur
         return
     chiffrer1 = pow(m, public_key.e, public_key.n) # chiffrement avec formule RSA
@@ -57,16 +57,26 @@ def decrypt_int(c, private_key): # chiffrement d'un entier avec la clé privée 
 # on veut aussi pouvoir chiffrer et déchiffrer des messages pas que des nombres, on convertit les messages en bytes
 # les deux fonctions qui suiven transforme un texte en byte, chiffre chaque octet individuellement, renvoi une liste d'entier et déchiffre pour retrouver les message originel
 def encrypt_block(data, public_key):
-    # Convert bytes to giant int
-    m = int.from_bytes(data, byteorder="big")
-    if m >= public_key.n:
-        raise ValueError("Message trop large pour RSA en un seul bloc")
-    # RSA
-    c = pow(m, public_key.e, public_key.n)
-    return c
+    max_len = (public_key.n.bit_length() // 8) - 1
 
-def decrypt_block(c, private_key):
-    m = pow(c, private_key.d, private_key.n)
-    # Convert int back to bytes
-    size = (private_key.n.bit_length() + 7) // 8
-    return m.to_bytes(size, byteorder="big").lstrip(b"\x00")
+    blocks = []
+    for i in range(0, len(data), max_len):
+        chunk = data[i:i + max_len]
+        m = int.from_bytes(chunk, "big")
+        c = pow(m, public_key.e, public_key.n)
+        blocks.append(c)
+
+    return blocks
+
+
+def decrypt_block(blocks, private_key):
+    result = b""
+    k = (private_key.n.bit_length() + 7) // 8
+
+    for c in blocks:
+        m = pow(c, private_key.d, private_key.n)
+        b = m.to_bytes(k, "big").lstrip(b"\x00")
+        result += b
+
+    return result
+
