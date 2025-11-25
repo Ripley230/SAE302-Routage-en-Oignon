@@ -7,3 +7,5 @@ Relance master
 Relance router1, router2, router3
 
 Relance client_test
+
+maintenant on à les gui donc juste besoin de lancer le master puis les gui et on est bon
