@@ -1,4 +1,0 @@
-sympy
-mysql-connector-python
-PyQt5
-pytest
