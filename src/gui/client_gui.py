@@ -1,17 +1,32 @@
 import sys
+import random
+from typing import List, Dict
+
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QGridLayout, QHBoxLayout,
-    QLabel, QLineEdit, QTextEdit, QPushButton, QMessageBox
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QPushButton,
+    QMessageBox,
+    QComboBox,
+    QSpinBox,
+    QHBoxLayout,
 )
 
-from src.client.client import send_message, get_route_from_master
+from src import db_utils
+from src.client.client import send_message
+from src.crypto.rsa_utils import PublicKey
 
 
 class ClientWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Client Onion - Envoi de message")
+        self.setWindowTitle("Onion Client - GUI simple")
         self.resize(700, 450)
 
         central = QWidget()
@@ -19,64 +34,128 @@ class ClientWindow(QMainWindow):
         grid = QGridLayout()
         central.setLayout(grid)
 
-        # Master IP + Port
-        grid.addWidget(QLabel("Master IP :"), 0, 0)
-        self.master_ip_edit = QLineEdit("127.0.0.1")
-        grid.addWidget(self.master_ip_edit, 0, 1)
+        # Ligne 0 : mon nom
+        grid.addWidget(QLabel("Moi (nom logique) :"), 0, 0)
+        self.my_name_edit = QLineEdit("ClientA")
+        grid.addWidget(self.my_name_edit, 0, 1, 1, 3)
 
-        grid.addWidget(QLabel("Port :"), 0, 2)
-        self.master_port_edit = QLineEdit("8000")
-        self.master_port_edit.setFixedWidth(80)
-        grid.addWidget(self.master_port_edit, 0, 3)
+        # Ligne 1 : destinataire + nb routeurs
+        grid.addWidget(QLabel("Destinataire :"), 1, 0)
+        self.dest_combo = QComboBox()
+        grid.addWidget(self.dest_combo, 1, 1)
 
-        # Message
-        grid.addWidget(QLabel("Message :"), 1, 0)
+        self.btn_refresh_clients = QPushButton("Rafraîchir clients")
+        grid.addWidget(self.btn_refresh_clients, 1, 2)
+
+        grid.addWidget(QLabel("Nb routeurs :"), 1, 3)
+        self.router_spin = QSpinBox()
+        self.router_spin.setMinimum(1)
+        self.router_spin.setMaximum(10)
+        self.router_spin.setValue(3)
+        grid.addWidget(self.router_spin, 1, 4)
+
+        # Ligne 2 : zone de chat (juste log local)
+        self.chat_view = QTextEdit()
+        self.chat_view.setReadOnly(True)
+        grid.addWidget(self.chat_view, 2, 0, 1, 5)
+
+        # Ligne 3 : saisie message + bouton envoyer
         self.message_edit = QLineEdit()
-        grid.addWidget(self.message_edit, 1, 1, 1, 3)
+        self.send_btn = QPushButton("Envoyer")
 
-        # Bouton envoyer
-        self.send_btn = QPushButton("Envoyer via Oignon")
-        grid.addWidget(self.send_btn, 2, 0, 1, 4)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addWidget(self.message_edit)
+        bottom_layout.addWidget(self.send_btn)
 
-        # Zone d'affichage
-        self.log_view = QTextEdit()
-        self.log_view.setReadOnly(True)
-        grid.addWidget(self.log_view, 3, 0, 1, 4)
+        grid.addLayout(bottom_layout, 3, 0, 1, 5)
 
+        # Connexions
+        self.btn_refresh_clients.clicked.connect(self.load_clients)
         self.send_btn.clicked.connect(self.on_send_clicked)
 
-    def log(self, msg: str):
-        self.log_view.append(msg)
+        # Chargement initial
+        self.load_clients()
+
+    # -------------------------------------------------
+    def log(self, text: str):
+        self.chat_view.append(text)
 
     def show_error(self, msg: str):
         QMessageBox.critical(self, "Erreur", msg)
 
-    def on_send_clicked(self):
-        message = self.message_edit.text().strip()
-        if not message:
-            self.show_error("Veuillez saisir un message.")
-            return
-
-        master_ip = self.master_ip_edit.text().strip()
+    # -------------------------------------------------
+    # Chargement des clients (depuis la BDD)
+    # -------------------------------------------------
+    def load_clients(self):
+        self.dest_combo.clear()
         try:
-            master_port = int(self.master_port_edit.text().strip())
-        except ValueError:
-            self.show_error("Port invalide.")
+            clients: List[Dict] = db_utils.get_all_clients()
+        except Exception as e:
+            self.show_error(f"Erreur DB (clients) : {e}")
             return
 
-        # Demande d’une route
-        route = get_route_from_master(master_ip, master_port)
-        if route is None:
-            self.show_error("Impossible d'obtenir une route !")
+        for c in clients:
+            label = f"{c['name']} ({c['ip']}:{c['port']})"
+            # On stocke ip & port dans userData
+            self.dest_combo.addItem(label, (c["ip"], c["port"]))
+
+        self.log(f"[INFO] {self.dest_combo.count()} client(s) chargés.")
+
+    # -------------------------------------------------
+    # Envoi du message
+    # -------------------------------------------------
+    def on_send_clicked(self):
+        msg = self.message_edit.text().strip()
+        if not msg:
             return
 
-        self.log("=== ROUTE UTILISÉE ===")
-        for r in route:
-            self.log(str(r))
-        self.log("======================")
+        if self.dest_combo.count() == 0:
+            self.show_error("Aucun client dans la liste. Ajoute un client dans le master GUI.")
+            return
 
-        send_message(message, route)
-        self.log(f"[ENVOYÉ] {message}")
+        dest_index = self.dest_combo.currentIndex()
+        dest_label = self.dest_combo.currentText()
+        dest_ip, dest_port = self.dest_combo.currentData()
+
+        nb_routers = self.router_spin.value()
+
+        # Récupérer les routeurs depuis la BDD
+        try:
+            routers: List[Dict] = db_utils.get_all_routers()
+        except Exception as e:
+            self.show_error(f"Erreur DB (routeurs) : {e}")
+            return
+
+        if len(routers) < nb_routers:
+            self.show_error(f"Pas assez de routeurs en BDD (demandé {nb_routers}, dispo {len(routers)}).")
+            return
+
+        # Choisir nb_routers de façon aléatoire
+        selected = random.sample(routers, nb_routers)
+
+        # Construire la route pour send_message
+        route = []
+        for r in selected:
+            pub = PublicKey(int(r["n"]), int(r["e"]))
+            route.append((pub, r["ip_port"]))
+
+        # 🔴 Simplicité : on envoie TOUJOURS vers le port réel du client_receiver
+        # Pour l'instant, on suppose que tous les clients écoutent sur 127.0.0.1:6000
+        # Si tu veux vraiment gérer plusieurs IP/ports physiques, il faudra adapter
+        # router.py + oignon_builder.py pour le dernier saut.
+        final_ip = "127.0.0.1"
+        final_port = 6000
+        route.append((None, f"{final_ip}:{final_port}"))
+
+        try:
+            send_message(msg, route)
+        except Exception as e:
+            self.show_error(f"Erreur lors de l'envoi : {e}")
+            return
+
+        me = self.my_name_edit.text().strip() or "Moi"
+        self.log(f"[{me} → {dest_label}] {msg} (via {nb_routers} routeur(s))")
+        self.message_edit.clear()
 
 
 def main():

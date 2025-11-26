@@ -1,17 +1,17 @@
 import socket
 
+
 def run_client_receiver(listen_port: int = 6000):
     """
-    Client B "récepteur" :
+    Client "récepteur" très simple :
     - écoute sur listen_port
-    - reçoit un message en clair (UTF-8)
-    - l'affiche
+    - affiche tous les messages reçus (UTF-8)
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("0.0.0.0", listen_port))
     sock.listen(1)
 
-    print(f"[CLIENT B] En écoute sur le port {listen_port}...")
+    print(f"[CLIENT RECEIVER] En écoute sur le port {listen_port}...")
 
     while True:
         conn, addr = sock.accept()
@@ -26,9 +26,10 @@ def run_client_receiver(listen_port: int = 6000):
         except UnicodeDecodeError:
             msg = repr(data)
 
-        print(f"[CLIENT B] Message reçu :", msg)
+        print(f"[CLIENT RECEIVER] Message reçu :", msg)
 
         conn.close()
+
 
 if __name__ == "__main__":
     run_client_receiver(6000)

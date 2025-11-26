@@ -1,24 +1,17 @@
 import json
 import socket
 import base64
+from threading import Thread
 
 from src.crypto.rsa_utils import decrypt_block
 from src.network.register import register_to_master
 
 
-def run_router(private_key, public_key, listen_port):
-    # Enregistrement auprès du master
-    register_to_master(public_key, listen_port)
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("0.0.0.0", listen_port))
-    sock.listen(1)
-
-    print(f"[ROUTER {listen_port}] En écoute...")
-
-    while True:
-        conn, addr = sock.accept()
-
+def handle_connection(conn, addr, private_key, listen_port):
+    """
+    Gère UN message reçu par le routeur, dans un thread.
+    """
+    try:
         # Lire tout le paquet
         buffer = b""
         while True:
@@ -27,14 +20,16 @@ def run_router(private_key, public_key, listen_port):
                 break
             buffer += chunk
 
+        if not buffer:
+            return
+
         # 1) On récupère la liste d'entiers RSA envoyée en JSON
         try:
             encrypted_blocks = json.loads(buffer.decode("utf-8"))
         except Exception as e:
             print(f"[ROUTER {listen_port}] ERREUR: données non JSON au niveau entrée :", e)
             print("Buffer brut (début):", buffer[:200], "...\n")
-            conn.close()
-            continue
+            return
 
         # 2) Déchiffrement de la couche pour CE routeur
         decrypted_bytes = decrypt_block(encrypted_blocks, private_key)
@@ -44,8 +39,7 @@ def run_router(private_key, public_key, listen_port):
         except Exception as e:
             print(f"[ROUTER {listen_port}] ERREUR: couche non décodable en UTF-8 / JSON :", e)
             print("Bytes reçus (début):", decrypted_bytes[:200], "...\n")
-            conn.close()
-            continue
+            return
 
         next_hop = layer["next_hop"]
         payload = layer["payload"]   # string base64 d'une couche interne
@@ -61,8 +55,7 @@ def run_router(private_key, public_key, listen_port):
                 msg_bytes = base64.b64decode(msg_b64)
             except Exception as e:
                 print(f"[ROUTER {listen_port}] ERREUR lors de l'extraction du message final :", e)
-                conn.close()
-                continue
+                return
 
             # Envoyer le message en clair au client B
             try:
@@ -74,8 +67,7 @@ def run_router(private_key, public_key, listen_port):
             except Exception as e:
                 print(f"[ROUTER {listen_port}] ERREUR d'envoi au client B :", e)
 
-            conn.close()
-            continue
+            return
 
         # 4) Routeur intermédiaire → on forward la couche interne vers next_hop
         if next_hop != "":
@@ -85,15 +77,13 @@ def run_router(private_key, public_key, listen_port):
             # Sécurité : si on se renvoie à soi-même, c'est que l'oignon est mal construit
             if ip == "127.0.0.1" and port == listen_port:
                 print(f"[ROUTER {listen_port}] ERREUR: tentative de forward vers lui-même !")
-                conn.close()
-                continue
+                return
 
             try:
                 inner_json_bytes = base64.b64decode(payload)
             except Exception as e:
                 print(f"[ROUTER {listen_port}] ERREUR: payload intermédiaire non base64 :", e)
-                conn.close()
-                continue
+                return
 
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -105,8 +95,7 @@ def run_router(private_key, public_key, listen_port):
             except Exception as e:
                 print(f"[ROUTER {listen_port}] ERREUR lors de l'envoi au next_hop {next_hop} :", e)
 
-            conn.close()
-            continue
+            return
 
         # 5) Cas rare : next_hop == "" → message final local (sans client_receiver)
         try:
@@ -118,4 +107,26 @@ def run_router(private_key, public_key, listen_port):
         except Exception as e:
             print(f"[ROUTER {listen_port}] ERREUR sur message final local :", e)
 
+    finally:
         conn.close()
+
+
+def run_router(private_key, public_key, listen_port):
+    # Enregistrement auprès du master (une seule fois)
+    register_to_master(public_key, listen_port)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("0.0.0.0", listen_port))
+    sock.listen()
+
+    print(f"[ROUTER {listen_port}] En écoute...")
+
+    while True:
+        conn, addr = sock.accept()
+        # Chaque message est traité dans un thread séparé
+        t = Thread(
+            target=handle_connection,
+            args=(conn, addr, private_key, listen_port),
+            daemon=True
+        )
+        t.start()
