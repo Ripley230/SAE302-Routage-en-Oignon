@@ -1,41 +1,77 @@
 import socket
-import random
 
-# Liste les routeurs qui sont enregistrés
+# Liste globale des routeurs connus par le master.
+# Chaque routeur est stocké comme une chaîne : "ip:port"
 ROUTERS = []
+
+
+def handle_connection(conn):
+    """
+    Gère une connexion entrante (soit d'un routeur, soit d'un client).
+    """
+    data = conn.recv(1024).decode().strip()
+
+    # -----------------------
+    # 1) Routeur qui s'annonce
+    # -----------------------
+    if data.startswith("REGISTER:"):
+        # Format attendu : REGISTER:127.0.0.1:5001
+        parts = data.split(":")
+        if len(parts) == 3:
+            command = parts[0]   # "REGISTER" (on ne l'utilise pas)
+            ip = parts[1]
+            port = parts[2]
+
+            ip_port = ip + ":" + port
+
+            # On ajoute le routeur s'il n'est pas déjà dans la liste
+            if ip_port not in ROUTERS:
+                ROUTERS.append(ip_port)
+                print("[MASTER] Nouveau routeur enregistré :", ip_port)
+            else:
+                print("[MASTER] Routeur déjà connu :", ip_port)
+
+            conn.send(b"OK")
+        else:
+            conn.send(b"BAD_FORMAT")
+
+    # -----------------------
+    # 2) Client qui s'annonce
+    # -----------------------
+    elif data.startswith("CLIENT:"):
+        # Format : CLIENT:A ou CLIENT:B
+        if len(ROUTERS) == 0:
+            # Aucun routeur pour l'instant
+            conn.send(b"NO_ROUTERS")
+        else:
+            # On renvoie tous les routeurs que l'on connaît
+            # Format : ROUTERS:ip1:port1;ip2:port2;ip3:port3;...
+            text = "ROUTERS:"
+            index = 0
+            while index < len(ROUTERS):
+                text = text + ROUTERS[index]
+                if index != len(ROUTERS) - 1:
+                    text = text + ";"
+                index = index + 1
+
+            conn.send(text.encode())
+
+    else:
+        # Message inconnu
+        conn.send(b"UNKNOWN")
+
 
 def main():
     sock = socket.socket()
     sock.bind(("0.0.0.0", 8000))
     sock.listen()
+
     print("[MASTER] En écoute sur le port 8000")
 
     while True:
-        conn, client_addr = sock.accept()
-        data = conn.recv(1024).decode()
-        if data.startswith("REGISTER:"):
-            # Exemple de ce qu'on reçoit : REGISTER:127.0.0.1:5001
-            parts = data.split(":")
-
-            # parts = ["REGISTER", "127.0.0.1", "5001"]
-            ip = parts[1]
-            port = parts[2]
-
-            ROUTERS.append(ip + ":" + port)
-            print("[MASTER] Routeur ajouté :", ip + ":" + port)
-            conn.send(b"OK")
-        elif data == "GET_ROUTE":
-            # On doit avoir minimum 3 routeurs pour faire le tirage au sort et même le reste (pour le moment)
-            if len(ROUTERS) < 3:
-                conn.send(b"NOT_ENOUGH")
-            else:
-                # Tire 3 routeurs au hasard pour faire le routage
-                route = random.sample(ROUTERS, 3)
-
-                # On renvoie sous forme ip1:port1;ip2:port2;ip3:port3
-                answer = route[0] + ";" + route[1] + ";" + route[2]
-                conn.send(answer.encode())
-
+        conn, client_address = sock.accept()
+        # client_address = (ip, port) de l'émetteur, qu'on n'utilise pas ici
+        handle_connection(conn)
         conn.close()
 
 
