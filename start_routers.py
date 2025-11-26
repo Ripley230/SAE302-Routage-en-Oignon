@@ -1,22 +1,51 @@
+# start_routers.py
 import subprocess
+import time
+
+processus_routeurs = []  # stocke les Popen
 
 def main():
-    base = 5001
-    txt = input("Combien de routeurs lancer ? ")
-    try:
-        nb = int(txt)
-    except:
-        nb = 1
+    global processus_routeurs
 
-    if nb < 1:
-        nb = 1
+    nb = int(input("Combien de routeurs lancer ? "))
+    processus_routeurs = []
 
-    i = 0
-    while i < nb:
-        port = base + i
-        subprocess.Popen(["python3", "router.py", str(port)])
-        print("Routeur lancé sur", port)
-        i = i + 1
+    port_depart = 5001
+
+    for i in range(nb):
+        port = port_depart + i
+        print(f"Routeur lancé sur {port}")
+
+        # lance "python router.py <port>"
+        p = subprocess.Popen(
+            ["python", "router.py", str(port)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+        processus_routeurs.append(p)
+        time.sleep(0.2)
+
+
+def stop():
+    """
+    Arrête proprement tous les routeurs lancés.
+    """
+    global processus_routeurs
+
+    print("Arrêt des routeurs...")
+
+    for p in processus_routeurs:
+        try:
+            p.terminate()  # demande d'arrêt
+        except:
+            pass
+
+    # Attendre un peu
+    time.sleep(0.5)
+
+    processus_routeurs = []
+
 
 if __name__ == "__main__":
     main()
