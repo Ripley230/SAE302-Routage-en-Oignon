@@ -69,7 +69,7 @@ class MasterWindow(QMainWindow):
         # ---------------------------
         self.router_table = QTableWidget(0, 4)
         self.router_table.setHorizontalHeaderLabels(
-            ["IP:Port", "n", "e", "En cours ?"]
+            ["IP:Port", "n", "e", "Status"]
         )
 
         grid.addWidget(QLabel("Routeurs enregistrés :"), 1, 0)
@@ -145,7 +145,11 @@ class MasterWindow(QMainWindow):
             n_val = str(r.get("n", ""))
             e_val = str(r.get("e", ""))
 
-            running = "Oui" if self.is_router_running(ip_port) else "Non"
+            if self.is_router_running(ip_port):
+                running = "Oui"
+            else:
+                running = "Non"
+
 
             row = self.router_table.rowCount()
             self.router_table.insertRow(row)
@@ -159,9 +163,14 @@ class MasterWindow(QMainWindow):
 
     def is_router_running(self, ip_port: str) -> bool:
         proc = self.router_processes.get(ip_port)
-        if proc is None:
+        if not proc:
+            print(f"[INFO] Aucun process pour {ip_port}")
             return False
-        return proc.poll() is None  # None = encore en cours
+
+        alive = proc.poll() is None
+        print(f"[INFO] Router {ip_port} running = {alive}")
+        return alive
+
 
     def get_selected_ip_port(self) -> Optional[str]:
         row = self.router_table.currentRow()
