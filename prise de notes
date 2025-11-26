@@ -1,0 +1,17 @@
+┌──(venv)─(quentin㉿Quentin)-[~/PycharmProjects/SAE302-Routage-en-Oignon]
+└─$ python3 master.py
+
+    ┌──(venv)─(quentin㉿Quentin)-[~/PycharmProjects/SAE302-Routage-en-Oignon]
+    └─$ ps aux | grep router.py
+
+    ┌──(venv)─(quentin㉿Quentin)-[~/PycharmProjects/SAE302-Routage-en-Oignon]
+    └─$ pkill -f "router.py"
+
+┌──(quentin㉿Quentin)-[~/PycharmProjects/SAE302-Routage-en-Oignon]
+└─$ python3 start_routers.py
+
+┌──(quentin㉿Quentin)-[~/PycharmProjects/SAE302-Routage-en-Oignon]
+└─$ python3 client_A.py
+
+┌──(quentin㉿Quentin)-[~/PycharmProjects/SAE302-Routage-en-Oignon]
+└─$ python3 client_B.py

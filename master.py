@@ -1,77 +1,63 @@
 import socket
 
-# Liste globale des routeurs connus par le master.
-# Chaque routeur est stocké comme une chaîne : "ip:port"
-ROUTERS = []
+# liste des routeurs connus
+liste_routeurs = []
 
 
-def handle_connection(conn):
-    """
-    Gère une connexion entrante (soit d'un routeur, soit d'un client).
-    """
-    data = conn.recv(1024).decode().strip()
+def gerer_message(connexion):
+    texte = connexion.recv(1024).decode().strip()
 
-    # -----------------------
-    # 1) Routeur qui s'annonce
-    # -----------------------
-    if data.startswith("REGISTER:"):
-        # Format attendu : REGISTER:127.0.0.1:5001
-        parts = data.split(":")
-        if len(parts) == 3:
-            command = parts[0]   # "REGISTER" (on ne l'utilise pas)
-            ip = parts[1]
-            port = parts[2]
-
+    # -----------------------------
+    # routeur qui s'annonce
+    # -----------------------------
+    if texte.startswith("ENREGISTRE:"):
+        morceaux = texte.split(":")
+        if len(morceaux) == 3:
+            ip = morceaux[1]
+            port = morceaux[2]
             ip_port = ip + ":" + port
 
-            # On ajoute le routeur s'il n'est pas déjà dans la liste
-            if ip_port not in ROUTERS:
-                ROUTERS.append(ip_port)
-                print("[MASTER] Nouveau routeur enregistré :", ip_port)
+            if ip_port not in liste_routeurs:
+                liste_routeurs.append(ip_port)
+                print("Routeur ajouté :", ip_port)
             else:
-                print("[MASTER] Routeur déjà connu :", ip_port)
+                print("Routeur déjà vu :", ip_port)
 
-            conn.send(b"OK")
+            connexion.send(b"OK")
         else:
-            conn.send(b"BAD_FORMAT")
+            connexion.send(b"MAUVAIS_FORMAT")
 
-    # -----------------------
-    # 2) Client qui s'annonce
-    # -----------------------
-    elif data.startswith("CLIENT:"):
-        # Format : CLIENT:A ou CLIENT:B
-        if len(ROUTERS) == 0:
-            # Aucun routeur pour l'instant
-            conn.send(b"NO_ROUTERS")
+    # -----------------------------
+    # client qui demande la liste
+    # -----------------------------
+    elif texte.startswith("JE_SUIS_CLIENT"):
+        if len(liste_routeurs) == 0:
+            connexion.send(b"AUCUN_ROUTEUR")
         else:
-            # On renvoie tous les routeurs que l'on connaît
-            # Format : ROUTERS:ip1:port1;ip2:port2;ip3:port3;...
-            text = "ROUTERS:"
-            index = 0
-            while index < len(ROUTERS):
-                text = text + ROUTERS[index]
-                if index != len(ROUTERS) - 1:
-                    text = text + ";"
-                index = index + 1
+            reponse = "LISTE:"
+            i = 0
+            while i < len(liste_routeurs):
+                reponse = reponse + liste_routeurs[i]
+                if i != len(liste_routeurs) - 1:
+                    reponse = reponse + ";"
+                i = i + 1
 
-            conn.send(text.encode())
+            connexion.send(reponse.encode())
 
     else:
-        # Message inconnu
-        conn.send(b"UNKNOWN")
+        connexion.send(b"INCONNU")
 
 
 def main():
-    sock = socket.socket()
-    sock.bind(("0.0.0.0", 8000))
-    sock.listen()
+    s = socket.socket()
+    s.bind(("0.0.0.0", 8000))
+    s.listen()
 
-    print("[MASTER] En écoute sur le port 8000")
+    print("Serveur central actif (port 8000)")
 
     while True:
-        conn, client_address = sock.accept()
-        # client_address = (ip, port) de l'émetteur, qu'on n'utilise pas ici
-        handle_connection(conn)
+        conn, adresse = s.accept()
+        gerer_message(conn)
         conn.close()
 
 
