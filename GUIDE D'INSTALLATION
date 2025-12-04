@@ -1,0 +1,149 @@
+# Guide d'Installation et d'Utilisation
+
+## Prérequis
+
+### Système d'Exploitation
+- Linux (testé sur Debian/Ubuntu/Kali)
+- Python 3.8 ou supérieur
+
+### Logiciels Requis
+
+1. **Python 3**
+```bash
+python3 --version
+```
+
+2. **MariaDB Server**
+```bash
+sudo apt update
+sudo apt install mariadb-server
+sudo systemctl start mariadb
+```
+
+3. **Bibliothèques Python**
+```bash
+pip install PyQt5 mysql-connector-python sympy
+```
+
+## Installation
+
+### Étape 1 : Récupération du Projet
+
+```bash
+git clone [URL_DU_DEPOT]
+cd SAE302-Routage-en-Oignon
+```
+
+### Étape 2 : Configuration de la Base de Données
+
+#### Option A : Créer un utilisateur dédié (Recommandé)
+
+```bash
+sudo mysql -e "CREATE USER IF NOT EXISTS 'onion'@'localhost' IDENTIFIED BY 'onion'; GRANT ALL PRIVILEGES ON *.* TO 'onion'@'localhost'; FLUSH PRIVILEGES;"
+```
+
+Puis modifier `db_utils.py` :
+```python
+USER = 'onion'
+PASSWORD = 'onion'
+```
+
+#### Option B : Utiliser root avec mot de passe
+
+Si vous avez un mot de passe root, modifiez `db_utils.py` :
+```python
+USER = 'root'
+PASSWORD = 'votre_mot_de_passe'
+```
+
+### Étape 3 : Initialisation de la Base
+
+```bash
+python3 db_utils.py
+```
+
+Vous devriez voir : `BDD prête.`
+
+## Utilisation
+
+### Lancement Manuel (Recommandé pour débuter)
+
+Ouvrez **5 terminaux différents** dans le dossier du projet :
+
+#### Terminal 1 : Annuaire
+```bash
+python3 directory_node.py
+```
+→ Cliquez sur "Lancer le serveur"
+
+#### Terminaux 2, 3, 4 : Routeurs
+```bash
+python3 onion_router.py
+```
+→ Cliquez sur "Démarrer" (faites-le 3 fois dans 3 terminaux)
+
+#### Terminal 5 : Client
+```bash
+python3 client.py
+```
+
+## Test de Fonctionnement
+
+### Test Simple (1 Client)
+
+1. **Lancez l'Annuaire** et démarrez-le
+2. **Lancez 3 Routeurs** (notez leurs ports, ex: 8377, 8041, 8624)
+3. **Lancez un Client** (notez son port, ex: 9161)
+4. Sur le Client :
+   - Destination IP : `127.0.0.1`
+   - Destination Port : `9161` (son propre port pour tester)
+   - Nombre de sauts : `3`
+   - Message : `test`
+   - Cliquez sur "Envoyer"
+
+5. **Vérification** :
+   - Les fenêtres des routeurs doivent afficher "Paquet reçu", "Déchiffrement...", "Je passe à..."
+   - Le dernier routeur affiche ">>> MESSAGE FINAL : test"
+   - Le client reçoit ">>> MESSAGE REÇU : test"
+
+### Test Communication (2 Clients)
+
+1. **Lancez l'Annuaire** et 3+ Routeurs
+2. **Lancez Client A** (port 9001 par exemple)
+3. **Lancez Client B** (port 9002 par exemple)
+4. Sur Client A :
+   - Destination : `127.0.0.1:9002` (adresse de B)
+   - Sauts : `4`
+   - Message : `Bonjour de A`
+   - Envoyer
+5. Client B devrait recevoir le message
+6. Client B peut répondre en envoyant vers `127.0.0.1:9001`
+
+## Dépannage
+
+### Erreur : "Access denied for user 'root'"
+→ Voir Étape 2 : Configuration de la Base de Données
+
+### Erreur : "No module named 'mysql'"
+```bash
+pip install mysql-connector-python
+```
+
+
+### Les routeurs ne reçoivent rien
+→ Vérifiez que :
+- L'annuaire est bien démarré
+- Les routeurs affichent "Inscrit à l'annuaire"
+- Le client affiche "X routeurs trouvés"
+
+### Le message n'arrive pas au destinataire
+→ Vérifiez que :
+- Le port de destination est correct
+- Le client destinataire est bien lancé et en écoute
+- Il y a assez de routeurs pour le nombre de sauts choisi
+
+## Arrêt du Système
+
+Fermez simplement toutes les fenêtres PyQt5 ou faites `Ctrl+C` dans chaque terminal.
+
+La base de données reste active et conserve les enregistrements.

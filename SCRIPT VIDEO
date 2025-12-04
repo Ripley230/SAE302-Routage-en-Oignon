@@ -1,0 +1,226 @@
+# Script de Démonstration - Vidéo
+
+Ce document vous guide pour créer la vidéo de démonstration (5-10 minutes).
+
+## Préparation
+
+### Environnement de Test
+- 1 machine virtuelle ou PC physique
+- Plusieurs terminaux ouverts
+- Enregistreur d'écran (SimpleScreenRecorder, OBS, etc.)
+
+### Avant d'Enregistrer
+```bash
+# Nettoyer la base
+sudo mysql -e "DROP DATABASE IF EXISTS onion_routing_db;"
+python3 db_utils.py
+
+# Vérifier que tout fonctionne
+python3 directory_node.py  # Test rapide puis fermer
+```
+
+## Plan de la Vidéo (10 minutes)
+
+### 1. Introduction (1 minute)
+
+**À dire :**
+> "Bonjour, je vais vous présenter notre projet de routage en oignon.
+> Ce système permet d'anonymiser les communications en faisant passer
+> les messages par plusieurs routeurs intermédiaires, chacun ne connaissant
+> que le précédent et le suivant."
+
+**À montrer :**
+- Architecture (schéma ou dessin)
+- Structure des fichiers du projet
+
+### 2. Environnement de Test (1 minute)
+
+**À dire :**
+> "Notre environnement de test est composé d'une machine Linux avec
+> MariaDB installé. Nous allons lancer plusieurs composants :
+> un annuaire, trois routeurs, et deux clients."
+
+**À montrer :**
+```bash
+ls -la  # Montrer les fichiers
+cat db_utils.py | head -10  # Montrer la config DB
+```
+
+### 3. Lancement du Système (2 minutes)
+
+**À dire :**
+> "Je commence par lancer l'annuaire, qui va gérer la liste des routeurs."
+
+**À faire :**
+```bash
+# Terminal 1
+python3 directory_node.py
+```
+→ Cliquer sur "Lancer le serveur"
+→ Montrer le log "Serveur prêt sur le port 9000"
+
+**À dire :**
+> "Maintenant je lance trois routeurs. Chacun va générer ses clefs
+> et s'inscrire auprès de l'annuaire."
+
+**À faire :**
+```bash
+# Terminaux 2, 3, 4
+python3 onion_router.py  # x3
+```
+→ Pour chaque routeur :
+  - Montrer "Génération des clefs..."
+  - Montrer "Clefs OK"
+  - Cliquer sur "Démarrer"
+  - Montrer "Inscrit à l'annuaire"
+
+→ Revenir à l'annuaire et montrer les 3 routeurs inscrits
+
+### 4. Lancement des Clients (1 minute)
+
+**À dire :**
+> "Je lance maintenant deux clients qui vont pouvoir communiquer
+> de manière anonyme."
+
+**À faire :**
+```bash
+# Terminaux 5 et 6
+python3 client.py  # x2
+```
+
+→ Noter les ports :
+  - Client A : 9XXX
+  - Client B : 9YYY
+
+→ Montrer "Prêt à recevoir des messages sur le port..."
+
+### 5. Démonstration de l'Anonymisation (3 minutes)
+
+**À dire :**
+> "Je vais maintenant envoyer un message du Client A vers le Client B
+> en passant par 3 routeurs. Observez comment le message passe de
+> routeur en routeur."
+
+**À faire sur Client A :**
+1. Remplir les champs :
+   - IP destination : 127.0.0.1
+   - Port destination : [port de B]
+   - Nombre de sauts : 3
+   - Message : "Bonjour depuis le Client A"
+
+2. Cliquer sur "Envoyer"
+
+**À montrer (IMPORTANT) :**
+→ Client A : "Message envoyé !"
+
+→ Routeur 1 :
+  - "Paquet reçu"
+  - "Déchiffrement..."
+  - "Je passe à [port routeur 2]"
+
+→ Routeur 2 :
+  - "Paquet reçu"
+  - "Déchiffrement..."
+  - "Je passe à [port routeur 3]"
+
+→ Routeur 3 :
+  - "Paquet reçu"
+  - "Déchiffrement..."
+  - "Je passe à [port client B]"
+
+→ Client B :
+  - ">>> MESSAGE REÇU : Bonjour depuis le Client A"
+
+**À dire :**
+> "Comme vous pouvez le voir, chaque routeur ne connaît que le précédent
+> et le suivant. Le routeur 2 ne sait pas que le message vient du Client A,
+> et le routeur 1 ne sait pas que la destination finale est le Client B."
+
+### 6. Démonstration du Chiffrement (1 minute)
+
+**À dire :**
+> "Montrons maintenant une trame pour voir le chiffrement en action."
+
+**À faire :**
+→ Ajouter un `print()` temporaire dans `onion_router.py` :
+
+```python
+# Dans traiter_paquet(), après la ligne 'donnees = client.recv(...)'
+print(f"TRAME CHIFFRÉE (extrait) : {donnees[:200]}...")
+```
+
+→ Relancer un routeur et renvoyer un message
+
+**À montrer :**
+- La trame chiffrée (suite de nombres)
+- Le message déchiffré (texte clair)
+
+**À dire :**
+> "Voici la trame chiffrée reçue par le routeur. C'est une suite de nombres
+> incompréhensibles. Après déchiffrement avec sa clef privée, le routeur
+> obtient les instructions pour le prochain saut."
+
+### 7. Communication Bidirectionnelle (1 minute)
+
+**À dire :**
+> "Le Client B peut maintenant répondre au Client A."
+
+**À faire sur Client B :**
+1. Remplir :
+   - IP : 127.0.0.1
+   - Port : [port de A]
+   - Sauts : 2 (différent pour montrer la flexibilité)
+   - Message : "Réponse du Client B"
+
+2. Envoyer
+
+**À montrer :**
+→ Passage par 2 routeurs
+→ Réception par Client A
+
+### 8. Conclusion (30 secondes)
+
+**À dire :**
+> "Notre système fonctionne parfaitement. Nous avons implémenté :
+> - Un chiffrement RSA personnalisé sans librairie externe
+> - Un protocole de communication sans JSON
+> - Une architecture distribuée avec base de données
+> - Une interface graphique pour tous les composants
+>
+> Les points forts sont la flexibilité (choix du nombre de sauts)
+> et l'anonymisation réelle des flux. Les améliorations possibles
+> seraient d'utiliser des clefs plus grandes et d'ajouter des
+> mécanismes de vérification d'intégrité.
+>
+> Merci de votre attention."
+
+## Conseils pour l'Enregistrement
+
+### Technique
+- Résolution : 1920x1080 minimum
+- Framerate : 30 FPS
+- Audio : Micro clair, pas de bruit de fond
+- Montrer le curseur de la souris
+
+### Présentation
+- Parler clairement et pas trop vite
+- Laisser le temps de voir les logs
+- Zoomer sur les parties importantes si nécessaire
+- Faire des pauses entre les sections
+
+### Montage (Optionnel)
+- Ajouter des sous-titres pour les points clés
+- Ajouter des flèches ou surlignages pour montrer le flux
+- Accélérer les parties longues (génération de clefs)
+- Ajouter une intro/outro simple
+
+## Checklist Avant Enregistrement
+
+- [ ] Base de données propre
+- [ ] Tous les fichiers à jour
+- [ ] Terminaux bien organisés à l'écran
+- [ ] Micro testé
+- [ ] Enregistreur d'écran configuré
+- [ ] Script lu et répété
+- [ ] Exemples de messages préparés
+- [ ] Chronomètre pour respecter les 10 minutes

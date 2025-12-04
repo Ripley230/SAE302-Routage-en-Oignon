@@ -1,0 +1,297 @@
+# Rapport de Projet - SAE 3.02
+## Conception d'une Architecture Distribuée avec Routage en Oignon
+
+---
+
+## 1. Introduction
+
+### 1.1 Contexte
+Ce projet s'inscrit dans le cadre de la SAE 3.02 et vise à développer une compréhension pratique des systèmes de communication anonyme et du chiffrement en couches.
+
+### 1.2 Objectifs
+- Implémenter un système de routage en oignon fonctionnel
+- Développer un algorithme de chiffrement personnalisé (sans librairies externes)
+- Créer une architecture client-serveur distribuée
+- Gérer une base de données pour l'annuaire des nœuds
+
+### 1.3 Contraintes Techniques
+- **Interdictions** : Librairies `json`, `cryptography`
+- **Autorisations** : `socket`, `threading`, `PyQt5`, `mysql.connector`, `sympy`, `random`, `time`, `os`, `sys`, `math`
+- **Base de données** : MariaDB (imposée)
+
+---
+
+## 2. Gestion du Projet
+
+### 2.1 Organisation du Travail
+
+#### Répartition des Tâches
+- **Recherche et conception** : Étude du protocole Tor, conception de l'architecture
+- **Développement crypto** : Implémentation de l'algorithme RSA et du chiffrement hybride
+- **Développement réseau** : Protocole de communication, gestion des sockets
+- **Base de données** : Schéma et requêtes SQL
+- **Interface graphique** : Développement des fenêtres PyQt5
+- **Tests et débogage** : Validation du système complet
+
+#### Outils Utilisés
+- **Gestion de version** : Git
+- **Développement** : PyCharm / VS Code
+- **Base de données** : MariaDB
+- **Tests** : Tests manuels avec plusieurs instances
+
+### 2.2 Planning
+
+#### Phase 1 : Conception (Semaine 1)
+- Analyse du cahier des charges
+- Conception de l'architecture
+- Définition du protocole de communication
+- Choix de l'algorithme de chiffrement
+
+#### Phase 2 : Développement (Semaines 2-3)
+- Implémentation du module de chiffrement
+- Développement de l'annuaire
+- Développement des routeurs
+- Développement du client
+- Intégration de la base de données
+
+#### Phase 3 : Tests et Optimisation (Semaine 4)
+- Tests unitaires des modules
+- Tests d'intégration
+- Correction du bug de taille de message
+- Optimisation des performances
+- Documentation
+
+### 2.3 Difficultés Rencontrées
+
+#### Problème 1 : Explosion de la Taille des Messages
+**Symptôme** : Les messages ne passaient pas par les routeurs.
+
+**Cause** : Le chiffrement RSA caractère par caractère du texte chiffré créait une explosion exponentielle de la taille :
+- Message initial : 4 octets
+- Après 3 routeurs : 13 Mo
+
+**Solution** : Implémentation d'un chiffrement hybride (RSA pour la clef, XOR pour le message).
+
+**Résultat** : Taille réduite à ~2 Ko pour le même message.
+
+#### Problème 2 : Segmentation Fault avec PyQt5
+**Symptôme** : Crash lors du lancement de plusieurs routeurs.
+
+**Cause** : Modification de l'interface graphique depuis un thread secondaire.
+
+**Solution** : Utilisation de `pyqtSignal` pour la communication thread-safe.
+
+#### Problème 3 : Permissions Base de Données
+**Symptôme** : "Access denied for user 'root'@'localhost'"
+
+**Solution** : Création d'un utilisateur dédié avec les bonnes permissions.
+
+---
+
+## 3. Réalisation Technique
+
+### 3.1 Architecture Globale
+
+```
+┌─────────┐
+│ Client A│◄─────┐
+└────┬────┘      │
+     │           │
+     ▼           │
+┌─────────────┐  │
+│  Annuaire   │  │
+│  (Master)   │  │
+└──────┬──────┘  │
+       │         │
+       ▼         │
+┌──────────────┐ │
+│  Routeur 1   │ │
+└──────┬───────┘ │
+       │         │
+       ▼         │
+┌──────────────┐ │
+│  Routeur 2   │ │
+└──────┬───────┘ │
+       │         │
+       ▼         │
+┌──────────────┐ │
+│  Routeur 3   │ │
+└──────┬───────┘ │
+       │         │
+       ▼         │
+┌─────────┐      │
+│ Client B│──────┘
+└─────────┘
+```
+
+### 3.2 Modules Développés
+
+#### crypto_utils.py (87 lignes)
+- Génération de clefs RSA avec nombres premiers
+- Chiffrement hybride (RSA + XOR)
+- Déchiffrement
+
+#### db_utils.py (78 lignes)
+- Connexion à MariaDB
+- Gestion de la table des routeurs
+- Opérations CRUD
+
+#### directory_node.py (145 lignes)
+- Serveur d'annuaire
+- Interface PyQt5
+- Gestion des inscriptions
+- Distribution de la liste
+
+#### onion_router.py (98 lignes)
+- Génération de clefs
+- Inscription à l'annuaire
+- Relais des messages
+- Interface PyQt5
+
+#### client.py (247 lignes)
+- Mode émission et réception
+- Construction de l'oignon
+- Choix du nombre de sauts
+- Interface PyQt5
+
+**Total : ~655 lignes de code**
+
+### 3.3 Protocole de Communication
+
+Le protocole développé est simple et basé sur des chaînes de caractères :
+
+```
+INSCRIPTION|IP|PORT|E|N          → Inscription routeur
+LISTE                            → Demande liste
+IP;PORT;E;N|IP;PORT;E;N|...     → Réponse liste
+IP|PORT|PAYLOAD                  → Structure message déchiffré
+```
+
+### 3.4 Algorithme de Chiffrement
+
+#### Génération de Clefs RSA
+```python
+1. Choisir deux nombres premiers p et q (entre 500 et 1000)
+2. Calculer n = p × q
+3. Calculer φ(n) = (p-1) × (q-1)
+4. Choisir e = 65537 (ou autre si pgcd(e, φ) ≠ 1)
+5. Calculer d = e⁻¹ mod φ
+6. Clef publique : (e, n)
+7. Clef privée : (d, n)
+```
+
+#### Chiffrement Hybride
+```python
+1. Générer clef secrète K (aléatoire)
+2. Chiffrer K avec RSA : C_K = K^e mod n
+3. Chiffrer message M avec XOR : C_M = M ⊕ K
+4. Retourner : "C_K::C_M"
+```
+
+#### Déchiffrement
+```python
+1. Séparer C_K et C_M
+2. Déchiffrer K : K = C_K^d mod n
+3. Déchiffrer M : M = C_M ⊕ K
+4. Retourner M
+```
+
+---
+
+## 4. Résultats et Validation
+
+### 4.1 Tests Effectués
+
+#### Test 1 : Communication Simple
+- **Configuration** : 1 client, 3 routeurs
+- **Message** : "test"
+- **Sauts** : 3
+- **Résultat** : ✅ Message reçu correctement
+
+#### Test 2 : Communication Bidirectionnelle
+- **Configuration** : 2 clients, 4 routeurs
+- **Messages** : "Bonjour" et "Réponse"
+- **Sauts** : 4 et 2
+- **Résultat** : ✅ Communication dans les deux sens
+
+#### Test 3 : Nombre de Sauts Variable
+- **Configuration** : 1 client, 5 routeurs
+- **Tests** : 1, 3, 5 sauts
+- **Résultat** : ✅ Fonctionne pour tous les nombres
+
+#### Test 4 : Messages Longs
+- **Message** : 500 caractères
+- **Sauts** : 3
+- **Résultat** : ✅ Transmission correcte
+
+### 4.2 Performances
+
+- **Génération de clefs** : ~2 secondes par routeur
+- **Temps de transmission** (3 sauts) : <1 seconde
+- **Taille message** (après optimisation) : ~2 Ko pour "test"
+
+---
+
+## 5. Éléments Implémentés et Non Implémentés
+
+### 5.1 Implémenté ✅
+
+- [x] Architecture distribuée (Annuaire, Routeurs, Clients)
+- [x] Chiffrement RSA personnalisé
+- [x] Chiffrement en couches (oignon)
+- [x] Protocole de communication personnalisé (sans JSON)
+- [x] Base de données MariaDB
+- [x] Interface graphique PyQt5
+- [x] Communication bidirectionnelle
+- [x] Choix du nombre de sauts
+- [x] Anonymisation des flux
+
+### 5.2 Non Implémenté ❌
+
+- [ ] Chiffrement de bout en bout du message final (le dernier saut est en clair)
+- [ ] Gestion de la déconnexion des routeurs
+- [ ] Mécanisme de retry en cas d'échec
+- [ ] Vérification d'intégrité (MAC/HMAC)
+- [ ] Protection contre le rejeu
+- [ ] Annuaire distribué
+- [ ] Persistance des clefs (régénérées à chaque lancement)
+
+---
+
+## 6. Conclusion
+
+### 6.1 Objectifs Atteints
+
+Le projet a permis de développer un système de routage en oignon fonctionnel respectant toutes les contraintes imposées. L'architecture est claire, le code est documenté, et le système fonctionne de manière fiable.
+
+### 6.2 Compétences Acquises
+
+- **AC23.01** : Scripts d'automatisation (lancer_projet.sh)
+- **AC23.02** : Développement d'application selon cahier des charges
+- **AC23.03** : Programmation réseau avec sockets
+- **AC23.04** : Administration de base de données MariaDB
+- **AC23.05** : Accès aux données depuis l'application
+
+### 6.3 Perspectives d'Amélioration
+
+1. **Sécurité** : Utiliser des clefs plus grandes, ajouter HMAC
+2. **Fiabilité** : Heartbeat, retry, timeout
+3. **Performance** : Connexions persistantes, cache
+4. **Anonymat** : Annuaire distribué, timing obfuscation
+
+### 6.4 Retour d'Expérience
+
+Ce projet a été très formateur, notamment sur :
+- La complexité du chiffrement et ses implications pratiques
+- L'importance de l'optimisation (problème de taille de message)
+- La gestion des threads en interface graphique
+- Le débogage de systèmes distribués
+
+---
+
+## Annexes
+
+- **Code source** : Disponible sur le dépôt Git
+- **Documentation technique** : DOCUMENTATION_TECHNIQUE.md
+- **Guide d'installation** : GUIDE_INSTALLATION.md
+- **Vidéo de démonstration** : [À créer]

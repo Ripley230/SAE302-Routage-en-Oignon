@@ -1,30 +1,120 @@
 # Projet SAE 3.02 : Routage en Oignon
 
-## Présentation
-Ce projet a pour but de créer un système d'anonymisation de trafic (comme Tor).
-Nous avons développé une architecture avec un annuaire central, des routeurs et un client.
+## Description
+
+Système de routage en oignon (type Tor) permettant l'anonymisation des communications réseau. Le projet implémente une architecture distribuée avec chiffrement en couches.
 
 ## Fonctionnalités
-- **Annuaire** : Liste les routeurs disponibles.
-- **Routeurs** : Transmettent les messages de proche en proche.
-- **Client** : Crée un circuit de 3 noeuds et chiffre le message en couches.
-- **Sécurité** : Nous avons implémenté notre propre algorithme RSA (car la librairie `cryptography` était interdite).
-- **Protocole** : Nous avons créé un protocole texte simple (séparé par des `|`) car `json` était interdit.
 
-## Installation
-1. Installer les dépendances :
-   `pip install PyQt5 mysql-connector-python sympy`
+- ✅ **Annuaire centralisé** : Gestion de la liste des routeurs actifs
+- ✅ **Routeurs intermédiaires** : Relais des messages chiffrés
+- ✅ **Clients émetteurs/récepteurs** : Communication bidirectionnelle anonyme
+- ✅ **Chiffrement personnalisé** : RSA + XOR (sans librairie cryptography)
+- ✅ **Choix du nombre de sauts** : De 1 à 10 routeurs intermédiaires
+- ✅ **Interface graphique** : PyQt5 pour tous les composants
+- ✅ **Base de données** : MariaDB pour l'annuaire
 
-2. Configurer la base de données :
-   - Ouvrir `db_utils.py`
-   - Mettre le bon mot de passe pour MariaDB.
-   - Lancer `python3 db_utils.py` pour créer la table.
+## Architecture
 
-## Lancement
-Il faut lancer les scripts dans cet ordre :
-1. `python3 directory_node.py` (Lancer le serveur)
-2. `python3 onion_router.py` (Lancer 3 fois pour avoir 3 routeurs)
-3. `python3 client.py` (Pour envoyer des messages)
+```
+Client A ──► Routeur 1 ──► Routeur 2 ──► Routeur 3 ──► Client B
+    ▲                                                      │
+    │                                                      │
+    └──────────────────────────────────────────────────────┘
+                    (via Annuaire)
+```
+
+## Installation Rapide
+
+### Prérequis
+```bash
+# Installer les dépendances
+pip install PyQt5 mysql-connector-python sympy
+
+# Installer et démarrer MariaDB
+sudo apt install mariadb-server
+sudo systemctl start mariadb
+```
+
+### Configuration Base de Données
+```bash
+# Créer un utilisateur
+sudo mysql -e "CREATE USER IF NOT EXISTS 'onion'@'localhost' IDENTIFIED BY 'onion'; GRANT ALL PRIVILEGES ON *.* TO 'onion'@'localhost'; FLUSH PRIVILEGES;"
+
+# Initialiser la base
+python3 db_utils.py
+```
+
+## Utilisation
+
+### Lancement Manuel
+
+Ouvrez 5 terminaux :
+
+```bash
+# Terminal 1 : Annuaire
+python3 directory_node.py
+
+# Terminaux 2, 3, 4 : Routeurs (3 instances)
+python3 onion_router.py
+
+# Terminal 5 : Client
+python3 client.py
+```
+
+### Lancement Automatique
+
+```bash
+chmod +x lancer_projet.sh
+./lancer_projet.sh
+```
+
+## Test Rapide
+
+1. Lancez l'Annuaire et cliquez sur "Lancer le serveur"
+2. Lancez 3 Routeurs et cliquez sur "Démarrer" pour chacun
+3. Lancez 2 Clients (notez leurs ports)
+4. Sur Client A :
+   - Destination : IP et port du Client B
+   - Nombre de sauts : 3
+   - Message : "Bonjour"
+   - Cliquez sur "Envoyer"
+5. Client B reçoit le message et peut répondre
+
+## Structure du Projet
+
+```
+SAE302-Routage-en-Oignon/
+├── crypto_utils.py          # Chiffrement RSA + XOR
+├── db_utils.py              # Gestion base de données
+├── directory_node.py        # Serveur annuaire
+├── onion_router.py          # Routeur intermédiaire
+├── client.py                # Client émetteur/récepteur
+├── lancer_projet.sh         # Script de lancement
+├── README.md                # Ce fichier
+├── GUIDE_INSTALLATION.md    # Guide détaillé
+├── DOCUMENTATION_TECHNIQUE.md  # Documentation complète
+└── RAPPORT_PROJET.md        # Rapport de projet
+```
+
+## Documentation
+
+- 📖 [Guide d'Installation](GUIDE_INSTALLATION.md) - Installation et configuration détaillées
+- 📚 [Documentation Technique](DOCUMENTATION_TECHNIQUE.md) - Architecture et protocoles
+- 📝 [Rapport de Projet](RAPPORT_PROJET.md) - Gestion de projet et résultats
+
+## Contraintes Respectées
+
+- ❌ Pas de librairie `json` → Protocole texte personnalisé
+- ❌ Pas de librairie `cryptography` → RSA implémenté avec `sympy`
+- ✅ Base de données MariaDB
+- ✅ Interface PyQt5
+- ✅ Sockets et threading
 
 ## Auteurs
-- Quentin
+
+Projet réalisé dans le cadre de la SAE 3.02 - R&T
+
+## Licence
+
+Projet éducatif - SAE 3.02

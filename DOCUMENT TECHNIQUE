@@ -1,0 +1,208 @@
+# Documentation Technique - Projet Routage en Oignon
+
+## Présentation du Projet
+
+Ce projet implémente un système de routage en oignon (inspiré de Tor) permettant l'anonymisation des communications réseau. Le système utilise une architecture distribuée avec chiffrement en couches.
+
+## Architecture du Système
+
+### Composants Principaux
+
+#### 1. Annuaire (directory_node.py)
+**Rôle :** Serveur central qui maintient la liste des routeurs actifs.
+
+**Fonctionnalités :**
+- Écoute sur le port 9000
+- Enregistre les routeurs qui se connectent
+- Fournit la liste des routeurs disponibles aux clients
+- Stocke les informations dans une base de données MariaDB
+
+**Interface :** Fenêtre PyQt5 affichant les logs et l'état du serveur.
+
+#### 2. Routeur Oignon (onion_router.py)
+**Rôle :** Nœud intermédiaire qui relaie les messages chiffrés.
+
+**Fonctionnalités :**
+- Génère une paire de clefs RSA au démarrage
+- S'enregistre auprès de l'annuaire
+- Écoute sur un port aléatoire (8000-8999)
+- Déchiffre une couche du message
+- Transmet le reste au prochain routeur ou au destinataire final
+
+**Interface :** Fenêtre PyQt5 montrant le port d'écoute et les logs de trafic.
+
+#### 3. Client (client.py)
+**Rôle :** Application permettant d'envoyer et recevoir des messages anonymisés.
+
+**Fonctionnalités :**
+- Écoute sur un port aléatoire (9000-9999) pour recevoir des messages
+- Récupère la liste des routeurs depuis l'annuaire
+- Permet de choisir le nombre de sauts (routeurs intermédiaires)
+- Construit l'oignon de chiffrement
+- Envoie le message au premier routeur
+
+**Interface :** Fenêtre PyQt5 avec champs pour destination, nombre de sauts, message, et zone de logs.
+
+## Modules Techniques
+
+### crypto_utils.py
+Module de chiffrement personnalisé (sans librairie cryptography).
+
+**Fonctions principales :**
+
+```python
+generer_clefs()
+```
+Génère une paire de clefs RSA (publique et privée) en utilisant `sympy` pour trouver des nombres premiers.
+
+```python
+chiffrer(message_texte, clef_publique)
+```
+Chiffrement hybride :
+1. Génère une clef secrète aléatoire
+2. Chiffre cette clef avec RSA
+3. Chiffre le message avec XOR en utilisant la clef secrète
+4. Retourne : `"CLEF_RSA::MESSAGE_XOR"`
+
+**Pourquoi hybride ?** Le chiffrement RSA caractère par caractère créait des messages gigantesques (plusieurs Mo). Le chiffrement hybride garde les messages à une taille raisonnable (quelques Ko).
+
+```python
+dechiffrer(message_chiffre_str, clef_privee)
+```
+Déchiffre un message au format hybride.
+
+### db_utils.py
+Module de gestion de la base de données MariaDB.
+
+**Fonctions principales :**
+
+```python
+init_bdd()
+```
+Crée la base de données et la table `routeurs` si elles n'existent pas.
+
+```python
+ajouter_routeur(ip, port, e, n)
+```
+Enregistre un routeur dans la base (ou met à jour s'il existe déjà).
+
+```python
+lire_routeurs()
+```
+Récupère la liste de tous les routeurs enregistrés.
+
+**Structure de la table :**
+```sql
+CREATE TABLE routeurs (
+    ip VARCHAR(50),
+    port INT,
+    e TEXT,      -- Exposant public
+    n TEXT       -- Module RSA
+)
+```
+
+## Protocole de Communication
+
+### Format des Messages
+
+Le protocole utilise des chaînes de caractères avec des séparateurs simples (pas de JSON car interdit).
+
+#### Inscription d'un Routeur
+```
+INSCRIPTION|IP|PORT|E|N
+```
+Exemple : `INSCRIPTION|127.0.0.1|8377|65537|982451653`
+
+#### Demande de Liste
+```
+LISTE
+```
+
+#### Réponse Liste
+```
+IP1;PORT1;E1;N1|IP2;PORT2;E2;N2|...
+```
+
+#### Message Chiffré (Structure Interne)
+Après déchiffrement par un routeur, le message contient :
+```
+IP_SUIVANTE|PORT_SUIVANT|PAYLOAD_CHIFFRE
+```
+
+## Algorithme de Routage en Oignon
+
+### Construction de l'Oignon (Client)
+
+1. **Récupération des routeurs** : Le client demande la liste à l'annuaire
+2. **Sélection du chemin** : Choix aléatoire de N routeurs (N = nombre de sauts choisi)
+3. **Construction des couches** (de l'intérieur vers l'extérieur) :
+
+```
+Message final = "IP_DEST|PORT_DEST|MESSAGE_CLAIR"
+
+Pour chaque routeur (en partant de la fin) :
+    Message_chiffré = chiffrer(Message_final, Clef_Routeur)
+    Message_final = "IP_Routeur|PORT_Routeur|Message_chiffré"
+
+Envoyer le dernier Message_chiffré au premier routeur
+```
+
+### Traitement par un Routeur
+
+1. **Réception** : Le routeur reçoit un message chiffré
+2. **Déchiffrement** : Utilise sa clef privée pour déchiffrer
+3. **Analyse** : Parse le résultat `IP|PORT|PAYLOAD`
+4. **Transmission** : Envoie le PAYLOAD à l'adresse IP:PORT indiquée
+
+## Forces et Faiblesses de l'Algorithme
+
+### Forces
+
+1. **Anonymisation** : Chaque routeur ne connaît que le précédent et le suivant
+2. **Chiffrement en couches** : Impossible de lire le message sans toutes les clefs
+3. **Flexibilité** : Le nombre de sauts est configurable
+4. **Simplicité** : Code compréhensible et maintenable
+
+### Faiblesses
+
+1. **Sécurité du chiffrement** :
+   - RSA avec petits nombres premiers (500-1000) : vulnérable à la factorisation
+   - XOR simple : vulnérable aux attaques par analyse de fréquence
+   - Pas de padding : vulnérable aux attaques par texte clair choisi
+
+2. **Performance** :
+   - Génération de clefs lente (nombres premiers)
+   - Latence augmente avec le nombre de sauts
+
+3. **Fiabilité** :
+   - Pas de gestion d'erreur si un routeur tombe
+   - Pas de vérification d'intégrité (MAC)
+   - Pas de protection contre le rejeu
+
+4. **Anonymat** :
+   - L'annuaire central est un point de défaillance unique
+   - Pas de protection contre l'analyse de trafic
+   - Les routeurs peuvent être compromis
+
+## Améliorations Possibles
+
+1. **Sécurité** :
+   - Utiliser des clefs RSA plus grandes (2048 bits minimum)
+   - Ajouter un chiffrement symétrique robuste (AES)
+   - Implémenter des signatures numériques
+   - Ajouter du padding (OAEP)
+
+2. **Fiabilité** :
+   - Système de heartbeat pour détecter les routeurs inactifs
+   - Mécanisme de retry en cas d'échec
+   - Vérification d'intégrité avec HMAC
+
+3. **Performance** :
+   - Cache des clefs publiques
+   - Connexions persistantes
+   - Compression des messages
+
+4. **Anonymat** :
+   - Annuaire distribué (DHT)
+   - Timing obfuscation
+   - Dummy traffic
