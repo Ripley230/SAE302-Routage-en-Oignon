@@ -62,13 +62,6 @@ python3 onion_router.py
 python3 client.py
 ```
 
-### Lancement Automatique
-
-```bash
-chmod +x lancer_projet.sh
-./lancer_projet.sh
-```
-
 ## Test Rapide
 
 1. Lancez l'Annuaire et cliquez sur "Lancer le serveur"
