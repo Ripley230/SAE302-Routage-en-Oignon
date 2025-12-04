@@ -1,8 +1,8 @@
 import mysql.connector
 
 # Config BDD
-USER = 'root'
-PASSWORD = ''
+USER = 'onion'
+PASSWORD = 'onion'
 HOST = '127.0.0.1'
 DATABASE = 'onion_routing_db'
 

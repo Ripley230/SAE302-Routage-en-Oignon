@@ -1,110 +1,246 @@
 import socket
 import sys
 import random
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QWidget, QTextEdit, QLineEdit
+import threading
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QWidget, QTextEdit, QLineEdit, \
+    QSpinBox
+from PyQt5.QtCore import pyqtSignal
 
 import crypto_utils
 
 
 class ClientWindow(QMainWindow):
+    signal_log = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Client Oignon")
-        self.resize(400, 300)
+        self.setWindowTitle("Client Oignon (Envoyeur & Receveur)")
+        self.resize(500, 600)
 
         self.layout = QVBoxLayout()
         self.widget = QWidget()
         self.widget.setLayout(self.layout)
         self.setCentralWidget(self.widget)
 
-        self.input = QLineEdit()
-        self.input.setPlaceholderText("Message...")
-        self.layout.addWidget(self.input)
+        # --- Partie Réception ---
+        self.mon_port = random.randint(9000, 9999)
+        self.label_port = QLabel(f"<b>Mon Port (pour recevoir) : {self.mon_port}</b>")
+        self.layout.addWidget(self.label_port)
 
-        self.btn = QPushButton("Envoyer")
-        self.btn.clicked.connect(self.envoyer)
-        self.layout.addWidget(self.btn)
+        # --- Partie Envoi ---
+        self.layout.addWidget(QLabel("--- Envoi de Message ---"))
 
+        self.input_dest_ip = QLineEdit("127.0.0.1")
+        self.input_dest_ip.setPlaceholderText("IP du destinataire")
+        self.layout.addWidget(self.input_dest_ip)
+
+        self.input_dest_port = QLineEdit()
+        self.input_dest_port.setPlaceholderText("Port du destinataire")
+        self.layout.addWidget(self.input_dest_port)
+
+        self.layout.addWidget(QLabel("Nombre de routeurs (sauts) :"))
+        self.spin_sauts = QSpinBox()
+        self.spin_sauts.setRange(1, 10)
+        self.spin_sauts.setValue(3)
+        self.layout.addWidget(self.spin_sauts)
+
+        self.input_msg = QLineEdit()
+        self.input_msg.setPlaceholderText("Votre message...")
+        self.layout.addWidget(self.input_msg)
+
+        self.btn_send = QPushButton("Envoyer")
+        self.btn_send.clicked.connect(self.envoyer)
+        self.layout.addWidget(self.btn_send)
+
+        # --- Logs ---
+        self.layout.addWidget(QLabel("--- Logs / Messages Reçus ---"))
         self.logs = QTextEdit()
+        self.logs.setReadOnly(True)
         self.layout.addWidget(self.logs)
 
         self.routeurs = []
+        self.signal_log.connect(self.ecrire_log)
+
+        # Démarrer l'écoute
+        threading.Thread(target=self.ecouter_messages, daemon=True).start()
 
     def log(self, msg):
+        self.signal_log.emit(msg)
+
+    def ecrire_log(self, msg):
         self.logs.append(msg)
+
+    def ecouter_messages(self):
+        """Écoute les messages entrants (comme un serveur)"""
+        try:
+            serveur = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            serveur.bind(('0.0.0.0', self.mon_port))
+            serveur.listen(5)
+            self.log(f"Prêt à recevoir des messages sur le port {self.mon_port}")
+
+            while True:
+                client, addr = serveur.accept()
+                threading.Thread(target=self.gerer_reception, args=(client,)).start()
+        except Exception as e:
+            self.log(f"Erreur écoute : {e}")
+
+    def gerer_reception(self, client):
+        try:
+            # On reçoit un message (qui vient du dernier routeur)
+            msg = client.recv(10240).decode('utf-8')
+            self.log(f">>> MESSAGE REÇU : {msg}")
+            client.close()
+        except:
+            pass
 
     def recuperer_routeurs(self):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(('127.0.0.1', 9000))
             s.send("LISTE".encode('utf-8'))
-
             reponse = s.recv(4096).decode('utf-8')
             s.close()
 
-            # Format : "IP1;PORT1;E1;N1|IP2..."
             if not reponse: return False
 
             liste = reponse.split("|")
             self.routeurs = []
             for item in liste:
                 parts = item.split(";")
-                # On stocke un petit dictionnaire simple
                 r = {
                     "ip": parts[0],
                     "port": int(parts[1]),
                     "clef": (int(parts[2]), int(parts[3]))
                 }
                 self.routeurs.append(r)
-
-            self.log(f"{len(self.routeurs)} routeurs trouvés.")
             return True
         except:
-            self.log("Erreur annuaire.")
+            self.log("Erreur : Impossible de joindre l'annuaire.")
             return False
 
     def envoyer(self):
-        msg = self.input.text()
-        if not msg: return
+        msg = self.input_msg.text()
+        dest_ip = self.input_dest_ip.text()
+        dest_port_str = self.input_dest_port.text()
+        nb_sauts = self.spin_sauts.value()
 
-        # 1. Avoir la liste
-        if not self.recuperer_routeurs(): return
-        if len(self.routeurs) < 3:
-            self.log("Pas assez de routeurs (min 3).")
+        if not msg or not dest_port_str:
+            self.log("Erreur : Remplissez le message et le port destinataire.")
             return
 
-        # 2. Choisir le chemin
-        chemin = random.sample(self.routeurs, 3)
-        r1, r2, r3 = chemin[0], chemin[1], chemin[2]
-        self.log(f"Chemin : {r1['port']} -> {r2['port']} -> {r3['port']}")
+        dest_port = int(dest_port_str)
+
+        # 1. Récupérer la liste des routeurs
+        if not self.recuperer_routeurs(): return
+
+        if len(self.routeurs) < nb_sauts:
+            self.log(f"Erreur : Pas assez de routeurs disponibles ({len(self.routeurs)}) pour {nb_sauts} sauts.")
+            return
+
+        # 2. Choisir le chemin (aléatoire)
+        chemin = random.sample(self.routeurs, nb_sauts)
+        ports_chemin = " -> ".join([str(r['port']) for r in chemin])
+        self.log(f"Chemin choisi ({nb_sauts} sauts) : {ports_chemin} -> {dest_port}")
 
         # 3. Construire l'oignon (Chiffrement en couches)
-        # Format du message clair pour un routeur : "IP_SUIVANTE|PORT_SUIVANT|MESSAGE_CHIFFRE_POUR_LUI"
+        # On part de la fin (le destinataire) et on remonte vers le début
 
-        # COUCHE 3 (Pour le dernier)
-        # Il doit lire : "FIN|0|Mon Message Secret"
-        msg_pour_r3 = f"FIN|0|{msg}"
-        chiffre_pour_r3 = crypto_utils.chiffrer(msg_pour_r3, r3['clef'])
+        # Le dernier paquet (celui que le dernier routeur enverra au client final)
+        # Il n'est PAS chiffré par le routeur, c'est le message final.
+        # Mais le dernier routeur s'attend à recevoir "FIN|0|Message" ou "IP|Port|Message"
+        # Attendez, le dernier routeur reçoit un message chiffré, le déchiffre, et obtient :
+        # "IP_SUIVANTE|PORT_SUIVANT|CONTENU"
+        # Si c'est le destinataire final, IP_SUIVANTE doit être l'IP du client, PORT_SUIVANT le port du client.
 
-        # COUCHE 2 (Pour le milieu)
-        # Il doit lire : "IP_R3|PORT_R3|Message_Chiffre_R3"
-        msg_pour_r2 = f"{r3['ip']}|{r3['port']}|{chiffre_pour_r3}"
-        chiffre_pour_r2 = crypto_utils.chiffrer(msg_pour_r2, r2['clef'])
+        # Donc, pour le dernier routeur (Rn), le contenu déchiffré doit être :
+        # "IP_DEST|PORT_DEST|MESSAGE_CLAIR"
 
-        # COUCHE 1 (Pour le premier)
-        # Il doit lire : "IP_R2|PORT_R2|Message_Chiffre_R2"
-        msg_pour_r1 = f"{r2['ip']}|{r2['port']}|{chiffre_pour_r2}"
-        chiffre_pour_r1 = crypto_utils.chiffrer(msg_pour_r1, r1['clef'])
+        paquet_actuel = f"{dest_ip}|{dest_port}|{msg}"
 
-        # 4. Envoyer au premier
+        # On remonte la chaine
+        # Pour chaque routeur (en partant du dernier), on chiffre le paquet actuel
+        # et on prépare les instructions pour le routeur précédent.
+
+        # On inverse le chemin pour traiter de la fin vers le début
+        chemin_inverse = list(reversed(chemin))
+
+        for i, routeur in enumerate(chemin_inverse):
+            # On chiffre le paquet actuel pour ce routeur
+            paquet_chiffre = crypto_utils.chiffrer(paquet_actuel, routeur['clef'])
+
+            # Maintenant, on prépare ce que le routeur PRECEDENT devra lire.
+            # Le routeur précédent devra lire : "IP_DE_CE_ROUTEUR|PORT_DE_CE_ROUTEUR|PAQUET_CHIFFRE"
+            # Sauf si c'est le tout premier routeur (celui à qui on envoie directement),
+            # lui il reçoit juste le paquet chiffré.
+
+            # Donc on met à jour 'paquet_actuel' pour le tour suivant
+            if i < len(chemin_inverse) - 1:
+                # Ce n'est pas le dernier (donc pas le premier de la chaine d'envoi)
+                # Le routeur précédent (dans la boucle, donc suivant dans le chemin) a besoin de l'adresse de CELUI-CI
+                # Attendez, je m'embrouille.
+                # Chemin : C -> R1 -> R2 -> R3 -> Dest
+                # Boucle (reversed) : R3, R2, R1
+
+                # Tour R3 :
+                # On veut que R3 reçoive : (chiffré avec K3) -> déchiffre -> "IP_Dest|Port_Dest|Msg"
+                # Donc contenu_R3 = "IP_Dest|Port_Dest|Msg"
+                # paquet_chiffre_R3 = chiffrer(contenu_R3, K3)
+
+                # Tour R2 :
+                # On veut que R2 reçoive : (chiffré avec K2) -> déchiffre -> "IP_R3|Port_R3|paquet_chiffre_R3"
+                # Donc contenu_R2 = "IP_R3|Port_R3|paquet_chiffre_R3"
+                # paquet_chiffre_R2 = chiffrer(contenu_R2, K2)
+
+                # Tour R1 :
+                # On veut que R1 reçoive : (chiffré avec K1) -> déchiffre -> "IP_R2|Port_R2|paquet_chiffre_R2"
+                # Donc contenu_R1 = "IP_R2|Port_R2|paquet_chiffre_R2"
+                # paquet_chiffre_R1 = chiffrer(contenu_R1, K1)
+
+                # A la fin, on envoie paquet_chiffre_R1 à R1.
+                pass
+
+            # Mise à jour pour le prochain tour (qui est le routeur précédent dans le chemin)
+            # Le "paquet_actuel" devient le contenu que le routeur précédent devra envoyer à celui-ci.
+            # Donc "IP_DE_CE_ROUTEUR|PORT_DE_CE_ROUTEUR|PAQUET_CHIFFRE_DE_CE_ROUTEUR"
+            paquet_actuel = f"{routeur['ip']}|{routeur['port']}|{paquet_chiffre}"
+
+        # A la fin de la boucle, 'paquet_actuel' contient "IP_R1|Port_R1|Chiffre_R1".
+        # MAIS le client envoie directement à R1. Il n'envoie pas "IP_R1...".
+        # Il envoie juste le contenu chiffré pour R1.
+        # Donc il faut récupérer le dernier 'paquet_chiffre' calculé.
+
+        # Refaisons la boucle proprement
+        message_a_transmettre = f"{dest_ip}|{dest_port}|{msg}"
+
+        for routeur in reversed(chemin):
+            # On chiffre le message pour ce routeur
+            message_chiffre = crypto_utils.chiffrer(message_a_transmettre, routeur['clef'])
+
+            # Le message à transmettre au routeur PRECEDENT sera :
+            # "IP_DU_ROUTEUR_ACTUEL|PORT_DU_ROUTEUR_ACTUEL|MESSAGE_CHIFFRE"
+            message_a_transmettre = f"{routeur['ip']}|{routeur['port']}|{message_chiffre}"
+
+        # Le dernier 'message_a_transmettre' est celui pour le client lui-même s'il devait l'envoyer à un R0.
+        # Mais le client EST R0.
+        # Donc le client doit extraire la partie "MESSAGE_CHIFFRE" de ce bloc pour l'envoyer à R1.
+        # Le bloc est "IP_R1|PORT_R1|CHIFFRE_R1"
+
+        parties = message_a_transmettre.split("|")
+        # parties[0] = IP_R1, parties[1] = Port_R1, parties[2] = Chiffre_R1
+
+        ip_premier_noeud = parties[0]
+        port_premier_noeud = int(parties[1])
+        payload_final = parties[2]
+
+        # 4. Envoyer
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((r1['ip'], r1['port']))
-            s.send(chiffre_pour_r1.encode('utf-8'))
+            s.connect((ip_premier_noeud, port_premier_noeud))
+            s.send(payload_final.encode('utf-8'))
             s.close()
-            self.log("Envoyé !")
-        except:
-            self.log("Erreur envoi.")
+            self.log("Message envoyé !")
+        except Exception as e:
+            self.log(f"Erreur envoi : {e}")
 
 
 app = QApplication(sys.argv)

@@ -3,11 +3,15 @@ import threading
 import sys
 import random
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QWidget, QTextEdit, QLineEdit
+from PyQt5.QtCore import pyqtSignal
 
 import crypto_utils
 
 
 class RouteurWindow(QMainWindow):
+    # On crée un "signal" pour parler à l'interface depuis les threads
+    signal_log = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Routeur Oignon")
@@ -33,7 +37,15 @@ class RouteurWindow(QMainWindow):
 
         self.mes_clefs = None
 
+        # On connecte le signal à la fonction qui écrit
+        self.signal_log.connect(self.ecrire_log)
+
     def log(self, msg):
+        # Au lieu d'écrire direct, on émet le signal
+        self.signal_log.emit(msg)
+
+    def ecrire_log(self, msg):
+        # Cette fonction sera exécutée par l'interface graphique
         self.logs.append(msg)
 
     def demarrer(self):
