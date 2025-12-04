@@ -1,0 +1,30 @@
+# Projet SAE 3.02 : Routage en Oignon
+
+## Présentation
+Ce projet a pour but de créer un système d'anonymisation de trafic (comme Tor).
+Nous avons développé une architecture avec un annuaire central, des routeurs et un client.
+
+## Fonctionnalités
+- **Annuaire** : Liste les routeurs disponibles.
+- **Routeurs** : Transmettent les messages de proche en proche.
+- **Client** : Crée un circuit de 3 noeuds et chiffre le message en couches.
+- **Sécurité** : Nous avons implémenté notre propre algorithme RSA (car la librairie `cryptography` était interdite).
+- **Protocole** : Nous avons créé un protocole texte simple (séparé par des `|`) car `json` était interdit.
+
+## Installation
+1. Installer les dépendances :
+   `pip install PyQt5 mysql-connector-python sympy`
+
+2. Configurer la base de données :
+   - Ouvrir `db_utils.py`
+   - Mettre le bon mot de passe pour MariaDB.
+   - Lancer `python3 db_utils.py` pour créer la table.
+
+## Lancement
+Il faut lancer les scripts dans cet ordre :
+1. `python3 directory_node.py` (Lancer le serveur)
+2. `python3 onion_router.py` (Lancer 3 fois pour avoir 3 routeurs)
+3. `python3 client.py` (Pour envoyer des messages)
+
+## Auteurs
+- Quentin
